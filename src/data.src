@@ -1,0 +1,192 @@
+// poche data — validated CRUD against schema field specs.
+
+func json_lit(typ, v) (lit, err) {
+    lit = ""
+    err = ""
+    if typ == "string" {
+        lit = "\"" + jesc_p(v) + "\""
+        return
+    }
+    if typ == "int" {
+        n := parse_int(v)
+        if str(n) != v && !(v == "0" && n == 0) {
+            // allow leading zeros / exact int parse
+            if len(v) == 0 { err = "empty int"  return }
+        }
+        lit = str(n)
+        return
+    }
+    if typ == "float" {
+        lit = v
+        return
+    }
+    if typ == "bool" {
+        if v == "true" || v == "1" { lit = "true"  return }
+        if v == "false" || v == "0" { lit = "false"  return }
+        err = "bool must be true/false"
+        return
+    }
+    err = "unknown type " + typ
+}
+
+func build_doc(fieldspec, kvs) (doc, errmsg) {
+    doc = ""
+    errmsg = ""
+    parts := []string{}
+    i := 0
+    while i < len(kvs) {
+        kv := kvs[i]
+        eq := index(kv, "=")
+        if eq < 0 { errmsg = "bad field assignment (want k=v): " + kv  return }
+        k := substr(kv, 0, eq)
+        v := substr(kv, eq + 1, len(kv))
+        t := field_type(fieldspec, k)
+        if t == "" { errmsg = "field not in schema: " + k  return }
+        lit, e := json_lit(t, v)
+        if e != "" { errmsg = e + " for " + k  return }
+        parts = append(parts, "\"" + jesc_p(k) + "\":" + lit)
+        i = i + 1
+    }
+    doc = "{" + join(parts, ",") + "}"
+}
+
+// doc_from_json rebuilds a canonical doc from a JSON body using the schema
+// (typed validation). Unknown JSON keys are ignored; at least one schema field
+// must be present. JSON token type must match the field type (no silent coerce).
+func doc_from_json(fieldspec, body) (doc, errmsg) {
+    doc = ""
+    errmsg = ""
+    if valid_doc(body) == 0 { errmsg = "body must be minified JSON object"  return }
+    kvs := []string{}
+    parts := split(fieldspec, ",")
+    i := 0
+    while i < len(parts) {
+        p := parts[i]
+        c := index(p, ":")
+        if c > 0 {
+            k := substr(p, 0, c)
+            t := substr(p, c + 1, len(p))
+            got, gerr := json_get(body, "." + k)
+            if len(gerr) == 0 {
+                quoted := 0
+                if len(got) >= 2 && substr(got, 0, 1) == "\"" { quoted = 1 }
+                if t == "string" && quoted == 0 { errmsg = "field " + k + " want string"  return }
+                if t == "int" && quoted == 1 { errmsg = "field " + k + " want int"  return }
+                if t == "float" && quoted == 1 { errmsg = "field " + k + " want float"  return }
+                if t == "bool" {
+                    if got != "true" && got != "false" { errmsg = "field " + k + " want bool"  return }
+                }
+                v := got
+                if quoted == 1 { v = unq(got) }
+                kvs = append(kvs, k + "=" + v)
+            }
+        }
+        i = i + 1
+    }
+    if len(kvs) == 0 { errmsg = "no schema fields present in body"  return }
+    doc, errmsg = build_doc(fieldspec, kvs)
+}
+
+func data_create(args) {
+    if len(args) < 2 { out_err(80, "input", "usage: data create <collection> <field=value> ...", "") }
+    coll := args[0]
+    s, found := schema_get(coll)
+    if found == 0 { out_err(90, "not_found", "no schema for " + coll, "poche schema define " + coll + " …") }
+    fv, _ := json_get(s, ".fields")
+    kvs := []string{}
+    i := 1
+    while i < len(args) { kvs = append(kvs, args[i])  i = i + 1 }
+    doc, em := build_doc(unq(fv), kvs)
+    if em != "" { out_err(81, "validation", em, "") }
+    id := to_hex(rand_bytes(8))
+    if st_put(coll, id, doc) == 0 { out_err(110, "internal", "write failed", "") }
+    out_ok("{\"collection\":\"" + jesc_p(coll) + "\",\"_id\":\"" + id + "\",\"doc\":" + doc + "}")
+}
+
+func data_list(args) {
+    if len(args) < 1 { out_err(80, "input", "usage: data list <collection> [--where k=v] [--limit N]", "") }
+    coll := args[0]
+    where := ""
+    limit := 0
+    i := 1
+    while i < len(args) {
+        if args[i] == "--where" && i + 1 < len(args) { where = args[i + 1]  i = i + 2  continue }
+        if args[i] == "--limit" && i + 1 < len(args) { limit = parse_int(args[i + 1])  i = i + 2  continue }
+        i = i + 1
+    }
+    _, found := schema_get(coll)
+    if found == 0 { out_err(90, "not_found", "no schema for " + coll, "") }
+    out_ok(st_find(coll, where, limit))
+}
+
+func data_get(args) {
+    if len(args) < 2 { out_err(80, "input", "usage: data get <collection> <id>", "") }
+    d, found := st_get(args[0], args[1])
+    if found == 0 { out_err(90, "not_found", "no document " + args[1] + " in " + args[0], "") }
+    out_ok("{\"id\":\"" + jesc_p(args[1]) + "\",\"doc\":" + d + "}")
+}
+
+func data_update(args) {
+    if len(args) < 3 { out_err(80, "input", "usage: data update <collection> <id> <field=value> ...", "") }
+    coll := args[0]
+    id := args[1]
+    s, found := schema_get(coll)
+    if found == 0 { out_err(90, "not_found", "no schema for " + coll, "") }
+    cur, ok := st_get(coll, id)
+    if ok == 0 { out_err(90, "not_found", "no document " + id, "") }
+    fv, _ := json_get(s, ".fields")
+    fieldspec := unq(fv)
+    // merge: start from current fields, overlay kvs
+    kvs := []string{}
+    parts := split(fieldspec, ",")
+    i := 0
+    while i < len(parts) {
+        p := parts[i]
+        c := index(p, ":")
+        if c > 0 {
+            k := substr(p, 0, c)
+            got, gerr := json_get(cur, "." + k)
+            if len(gerr) == 0 {
+                v := unq(got)
+                if substr(got, 0, 1) != "\"" { v = got }
+                kvs = append(kvs, k + "=" + v)
+            }
+        }
+        i = i + 1
+    }
+    j := 2
+    while j < len(args) {
+        kv := args[j]
+        eq := index(kv, "=")
+        if eq > 0 {
+            k := substr(kv, 0, eq)
+            v := substr(kv, eq + 1, len(kv))
+            nk := []string{}
+            replaced := 0
+            n := 0
+            while n < len(kvs) {
+                eq2 := index(kvs[n], "=")
+                if eq2 > 0 && substr(kvs[n], 0, eq2) == k {
+                    nk = append(nk, k + "=" + v)
+                    replaced = 1
+                } else {
+                    nk = append(nk, kvs[n])
+                }
+                n = n + 1
+            }
+            if replaced == 0 { nk = append(nk, kv) }
+            kvs = nk
+        }
+        j = j + 1
+    }
+    doc, em := build_doc(fieldspec, kvs)
+    if em != "" { out_err(81, "validation", em, "") }
+    if st_put(coll, id, doc) == 0 { out_err(110, "internal", "write failed", "") }
+    out_ok("{\"collection\":\"" + jesc_p(coll) + "\",\"_id\":\"" + id + "\",\"doc\":" + doc + "}")
+}
+
+func data_delete(args) {
+    if len(args) < 2 { out_err(80, "input", "usage: data delete <collection> <id>", "") }
+    if st_del(args[0], args[1]) == 0 { out_err(90, "not_found", "no document " + args[1], "") }
+    out_ok("{\"deleted\":1,\"_id\":\"" + jesc_p(args[1]) + "\"}")
+}

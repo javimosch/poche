@@ -1,0 +1,241 @@
+// poche serve — single-actor HTTP (grange-safe): REST + /watch long-poll.
+// Deliberately NOT machweb serve() — the grange engine is single-actor.
+
+func srv_ok(data) (res) {
+    res = response("200 OK", "application/json", "{\"ok\":true,\"data\":" + data + "}")
+}
+
+func srv_err(status, typ, msg) (res) {
+    res = response(status, "application/json", "{\"ok\":false,\"error\":{\"type\":\"" + typ + "\",\"message\":\"" + jesc_p(msg) + "\"}}")
+}
+
+func bearer(req) (tok) {
+    tok = ""
+    h := header(req, "authorization")
+    if has_prefix(h, "Bearer ") { tok = substr(h, 7, len(h)) }
+    if has_prefix(h, "bearer ") { tok = substr(h, 7, len(h)) }
+}
+
+func path_coll(path) (coll) {
+    coll = ""
+    // /api/<coll> or /api/<coll>/<id>
+    if has_prefix(path, "/api/") == false { return }
+    rest := substr(path, 5, len(path))
+    q := index(rest, "?")
+    if q >= 0 { rest = substr(rest, 0, q) }
+    slash := index(rest, "/")
+    if slash < 0 { coll = rest  return }
+    coll = substr(rest, 0, slash)
+}
+
+func path_id(path) (id) {
+    id = ""
+    if has_prefix(path, "/api/") == false { return }
+    rest := substr(path, 5, len(path))
+    q := index(rest, "?")
+    if q >= 0 { rest = substr(rest, 0, q) }
+    slash := index(rest, "/")
+    if slash < 0 { return }
+    id = substr(rest, slash + 1, len(rest))
+}
+
+func exposed_ok(coll, action) (yes) {
+    yes = 0
+    s, found := schema_get(coll)
+    if found == 0 { return }
+    ev, _ := json_get(s, ".exposed")
+    if parse_int(unq(ev)) != 1 { return }
+    av, _ := json_get(s, ".actions")
+    acts := "," + unq(av) + ","
+    if contains(acts, "," + action + ",") { yes = 1 }
+}
+
+func srv_handle(req) (res) {
+    res = srv_err("404 Not Found", "not_found", "no such route")
+    p := req.path
+    q := index(p, "?")
+    if q >= 0 { p = substr(p, 0, q) }
+
+    if req.method == "GET" && (p == "/health" || p == "/_health") {
+        res = srv_ok("{\"status\":\"ok\",\"tool\":\"poche\"}")
+        return
+    }
+    if req.method == "GET" && p == "/guide" {
+        res = response("200 OK", "application/json", guide_json())
+        return
+    }
+    if req.method == "POST" && p == "/v1/feedback" {
+        res = h_feedback(req)
+        return
+    }
+    if req.method == "GET" && p == "/v1/version" {
+        res = h_version()
+        return
+    }
+    if req.method == "POST" && p == "/tenants" {
+        res = h_tenants(req)
+        return
+    }
+
+    tok := bearer(req)
+    if cloud_activate(tok) == 0 && cloud_on() == 1 {
+        // allow admin root token only for /health already returned; else 401
+        if p != "/health" && p != "/_health" && p != "/guide" {
+            res = srv_err("401 Unauthorized", "auth", "unknown tenant token (POST /tenants with X-Peage-Wallet)")
+            return
+        }
+    }
+
+    if req.method == "GET" && (p == "/files" || has_prefix(p, "/files/")) {
+        u, uf := user_by_token(tok)
+        if uf == 0 && g_cloud_admin == 0 { res = srv_err("403 Forbidden", "auth", "token required")  return }
+        fid := substr(p, 7, len(p))
+        if has_prefix(fid, "/") { fid = substr(fid, 1, len(fid)) }
+        if len(fid) == 0 {
+            res = srv_ok(st_all("_files", 0))
+            return
+        }
+        meta, found := st_get("_files", fid)
+        if found == 0 { res = srv_err("404 Not Found", "not_found", "no file")  return }
+        pv, _ := json_get(meta, ".path")
+        body := read_file(unq(pv))
+        res = response("200 OK", "application/octet-stream", body)
+        return
+    }
+
+    if req.method == "GET" && p == "/watch" {
+        coll := query(req, "coll")
+        if len(coll) == 0 { res = srv_err("400 Bad Request", "input", "missing coll")  return }
+        if exposed_ok(coll, "read") == 0 { res = srv_err("403 Forbidden", "forbidden", "collection not exposed for read")  return }
+        if allowed(tok, coll, "read") == 0 { res = srv_err("403 Forbidden", "auth", "token lacks read")  return }
+        if st_use(coll) == 0 { res = srv_err("500 Internal Server Error", "internal", "open failed")  return }
+        since := parse_int(query(req, "since"))
+        tmo := parse_int(query(req, "timeout"))
+        if tmo < 1 { tmo = 25 }
+        if tmo > 55 { tmo = 55 }
+        if g_seq > since || since > g_seq {
+            res = srv_ok(watch_payload(since))
+            return
+        }
+        if len(g_w_fd) >= 100 {
+            res = srv_err("503 Service Unavailable", "capacity", "too many parked watchers")
+            return
+        }
+        g_park = tmo
+        // park filled by caller with coll/since
+        res = srv_ok("")
+        return
+    }
+
+    coll := path_coll(p)
+    id := path_id(p)
+    if len(coll) == 0 { return }
+
+    if req.method == "GET" && len(id) == 0 {
+        if exposed_ok(coll, "read") == 0 { res = srv_err("403 Forbidden", "forbidden", "not exposed")  return }
+        if allowed(tok, coll, "read") == 0 { res = srv_err("403 Forbidden", "auth", "token lacks read")  return }
+        res = srv_ok(st_find(coll, query(req, "where"), parse_int(query(req, "limit"))))
+        return
+    }
+    if req.method == "GET" && len(id) > 0 {
+        if exposed_ok(coll, "read") == 0 { res = srv_err("403 Forbidden", "forbidden", "not exposed")  return }
+        if allowed(tok, coll, "read") == 0 { res = srv_err("403 Forbidden", "auth", "token lacks read")  return }
+        d, found := st_get(coll, id)
+        if found == 0 { res = srv_err("404 Not Found", "not_found", "missing doc")  return }
+        res = srv_ok("{\"id\":\"" + jesc_p(id) + "\",\"doc\":" + d + "}")
+        return
+    }
+    if req.method == "POST" && len(id) == 0 {
+        if exposed_ok(coll, "create") == 0 { res = srv_err("403 Forbidden", "forbidden", "not exposed for create")  return }
+        if allowed(tok, coll, "create") == 0 { res = srv_err("403 Forbidden", "auth", "token lacks create")  return }
+        s, found := schema_get(coll)
+        if found == 0 { res = srv_err("404 Not Found", "not_found", "no schema")  return }
+        fv, _ := json_get(s, ".fields")
+        doc, em := doc_from_json(unq(fv), trim(req.body))
+        if em != "" { res = srv_err("400 Bad Request", "validation", em)  return }
+        nid := to_hex(rand_bytes(8))
+        if st_put(coll, nid, doc) == 0 { res = srv_err("500 Internal Server Error", "internal", "write failed")  return }
+        res = srv_ok("{\"_id\":\"" + nid + "\",\"doc\":" + doc + "}")
+        return
+    }
+    if req.method == "PUT" && len(id) > 0 {
+        if exposed_ok(coll, "update") == 0 { res = srv_err("403 Forbidden", "forbidden", "not exposed for update")  return }
+        if allowed(tok, coll, "update") == 0 { res = srv_err("403 Forbidden", "auth", "token lacks update")  return }
+        cur, found := st_get(coll, id)
+        if found == 0 { res = srv_err("404 Not Found", "not_found", "missing doc")  return }
+        s, sfound := schema_get(coll)
+        if sfound == 0 { res = srv_err("404 Not Found", "not_found", "no schema")  return }
+        fv, _ := json_get(s, ".fields")
+        fieldspec := unq(fv)
+        // merge: current fields + body overlay, then validate
+        patch, pem := doc_from_json(fieldspec, trim(req.body))
+        if pem != "" { res = srv_err("400 Bad Request", "validation", pem)  return }
+        // rebuild merge of cur + patch field-by-field
+        kvs := []string{}
+        parts := split(fieldspec, ",")
+        i := 0
+        while i < len(parts) {
+            p2 := parts[i]
+            c := index(p2, ":")
+            if c > 0 {
+                k := substr(p2, 0, c)
+                got, gerr := json_get(patch, "." + k)
+                if len(gerr) > 0 { got, gerr = json_get(cur, "." + k) }
+                if len(gerr) == 0 {
+                    v := got
+                    if len(got) >= 2 && substr(got, 0, 1) == "\"" { v = unq(got) }
+                    kvs = append(kvs, k + "=" + v)
+                }
+            }
+            i = i + 1
+        }
+        doc, em := build_doc(fieldspec, kvs)
+        if em != "" { res = srv_err("400 Bad Request", "validation", em)  return }
+        if st_put(coll, id, doc) == 0 { res = srv_err("500 Internal Server Error", "internal", "write failed")  return }
+        res = srv_ok("{\"_id\":\"" + id + "\",\"doc\":" + doc + "}")
+        return
+    }
+    if req.method == "DELETE" && len(id) > 0 {
+        if exposed_ok(coll, "delete") == 0 { res = srv_err("403 Forbidden", "forbidden", "not exposed for delete")  return }
+        if allowed(tok, coll, "delete") == 0 { res = srv_err("403 Forbidden", "auth", "token lacks delete")  return }
+        if st_del(coll, id) == 0 { res = srv_err("404 Not Found", "not_found", "missing doc")  return }
+        res = srv_ok("{\"deleted\":1,\"_id\":\"" + id + "\"}")
+        return
+    }
+}
+
+func cmd_serve(args) {
+    port := 7700
+    if len(args) > 0 { port = parse_int(args[0]) }
+    if port == 0 { port = 7700 }
+    ensure_meta()
+    harden(16777216, 30000)
+    eprint("{\"event\":\"listening\",\"port\":" + str(port) + ",\"db\":\"" + jesc_p(poche_db()) + "\"}")
+    server := listen(port)
+    socket_timeout(server, 250)
+    for {
+        conn := accept(server)
+        if conn >= 0 {
+            socket_timeout(conn, 5000)
+            raw := read_request(conn)
+            if len(raw) == 0 {
+                close(conn)
+            } else {
+                req := parse_request(raw)
+                req.remote = peer_addr(conn)
+                g_park = 0
+                park_coll := query(req, "coll")
+                park_since := parse_int(query(req, "since"))
+                res := srv_handle(req)
+                if g_park > 0 {
+                    watch_park(conn, park_coll, park_since, g_park)
+                } else {
+                    out := "HTTP/1.1 " + res.status + "\r\nContent-Type: " + res.ctype + "\r\nContent-Length: " + str(len(res.body)) + "\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n" + res.body
+                    write(conn, out)
+                    close(conn)
+                }
+            }
+        }
+        watch_tick()
+    }
+}

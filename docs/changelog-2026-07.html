@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Changelog July 2026 — poche</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700&family=IBM+Plex+Mono&display=swap" rel="stylesheet" />
+    <style>
+      body { font-family: 'IBM Plex Mono', monospace; background: #0b0f0c; color: #d7e0d9; }
+      h1, h2 { font-family: 'Syne', system-ui, sans-serif; }
+      .tab-btn.active { border-color: #34d399; color: #fff; background: #121816; }
+      .tab-content { display: none; }
+      .tab-content.active { display: block; }
+    </style>
+  </head>
+  <body class="min-h-screen">
+    <div class="max-w-3xl mx-auto px-6 py-20">
+      <a href="changelog.html" class="text-sm text-white/40 hover:text-white/80">← Changelog</a>
+      <h1 class="text-4xl font-bold text-white mt-6">July 2026</h1>
+      <p class="text-white/40 mt-2">poche v0.1.0</p>
+      <div class="mt-8 flex gap-2">
+        <button class="tab-btn active px-4 py-2 border border-white/15 rounded text-sm" data-tab="product">Product</button>
+        <button class="tab-btn px-4 py-2 border border-white/15 rounded text-sm text-white/60" data-tab="tech">Technical</button>
+      </div>
+      <div id="product" class="tab-content active mt-8 space-y-4">
+        <div class="p-5 rounded border border-white/10 bg-black/30">
+          <h2 class="text-emerald-300 text-lg mb-2">Agent-first CMS</h2>
+          <p class="text-white/60 text-sm leading-relaxed">Headless CMS surface (schemas, data, RBAC, expose, serve) with JSON CLI + REST. No Admin UI. Realtime long-poll <code>/watch</code>. Files via blob dir.</p>
+        </div>
+        <div class="p-5 rounded border border-white/10 bg-black/30">
+          <h2 class="text-emerald-300 text-lg mb-2">grange storage</h2>
+          <p class="text-white/60 text-sm leading-relaxed">Embeds grange engine (not SQLite). 100k-doc bench ~180k inserts/s with indexes. Upstream split: <code>engine.src</code> + <code>registry.src</code> (≤500 LOC each).</p>
+        </div>
+        <div class="p-5 rounded border border-white/10 bg-black/30">
+          <h2 class="text-emerald-300 text-lg mb-2">cli-specs</h2>
+          <p class="text-white/60 text-sm leading-relaxed"><code>guide</code>, <code>help-json</code>, semantic exits 80–119, <code>feedback</code> dual-write, <code>update</code> download stub.</p>
+        </div>
+      </div>
+      <div id="tech" class="tab-content mt-8 space-y-3 text-sm text-white/60">
+        <p>🚀 Features — init/schema/data/role/grant/user/file/serve/bench/guide/feedback/update</p>
+        <p>⚡ Performance — <code>poche bench --n 100000</code> over grange WAL + indexes</p>
+        <p>🚜 Refactor — grange <code>engine.src</code> → <code>registry.src</code> multi-collection park/use</p>
+        <p>⚙️ Misc — docs GH-pages layout, test.sh smoke, FOLLOWUPS.md</p>
+      </div>
+    </div>
+    <script>
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+          btn.classList.add('active');
+          document.getElementById(btn.dataset.tab).classList.add('active');
+        });
+      });
+    </script>
+  </body>
+</html>

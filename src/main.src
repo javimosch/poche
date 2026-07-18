@@ -1,0 +1,76 @@
+// poche — agent-first headless CMS over grange. CLI entry.
+
+func usage() {
+    eprint("usage: poche <command> …")
+    eprint("commands: init | schema | data | role | grant | user | file | serve | bench | guide | help-json | feedback | update | version")
+    exit(80)
+}
+
+func shift(args, n) (out) {
+    out = []string{}
+    i := n
+    while i < len(args) { out = append(out, args[i])  i = i + 1 }
+}
+
+func main() {
+    argv := args()
+    // args()[0] is the program path
+    if len(argv) < 2 { usage() }
+    cmd := argv[1]
+    rest := shift(argv, 2)
+
+    if cmd == "version" { cmd_version() }
+    if cmd == "guide" { cmd_guide(rest) }
+    if cmd == "help-json" { cmd_help_json() }
+    if cmd == "feedback" { cmd_feedback(rest) }
+    if cmd == "update" { cmd_update(rest) }
+    if cmd == "init" { poche_init() }
+    if cmd == "bench" { cmd_bench(rest) }
+    if cmd == "serve" { cmd_serve(rest) }
+
+    if cmd == "schema" {
+        if len(rest) < 1 { out_err(80, "input", "usage: schema define|list|get|expose|unexpose|index …", "") }
+        sub := rest[0]
+        r2 := shift(rest, 1)
+        if sub == "define" { schema_define(r2) }
+        if sub == "list" { schema_list_cmd() }
+        if sub == "get" { schema_get_cmd(r2) }
+        if sub == "expose" { schema_expose_cmd(r2, 1) }
+        if sub == "unexpose" { schema_expose_cmd(r2, 0) }
+        if sub == "index" { schema_index_cmd(r2) }
+        out_err(80, "input", "unknown schema subcommand: " + sub, "")
+    }
+    if cmd == "data" {
+        if len(rest) < 1 { out_err(80, "input", "usage: data create|list|get|update|delete …", "") }
+        sub := rest[0]
+        r2 := shift(rest, 1)
+        if sub == "create" { data_create(r2) }
+        if sub == "list" { data_list(r2) }
+        if sub == "get" { data_get(r2) }
+        if sub == "update" { data_update(r2) }
+        if sub == "delete" { data_delete(r2) }
+        out_err(80, "input", "unknown data subcommand: " + sub, "")
+    }
+    if cmd == "role" {
+        if len(rest) < 1 { out_err(80, "input", "usage: role add|list …", "") }
+        if rest[0] == "add" { role_add(shift(rest, 1)) }
+        if rest[0] == "list" { role_list() }
+        out_err(80, "input", "unknown role subcommand", "")
+    }
+    if cmd == "grant" { grant_cmd(rest) }
+    if cmd == "user" {
+        if len(rest) < 1 { out_err(80, "input", "usage: user add|list …", "") }
+        if rest[0] == "add" { user_add(shift(rest, 1)) }
+        if rest[0] == "list" { user_list() }
+        out_err(80, "input", "unknown user subcommand", "")
+    }
+    if cmd == "file" {
+        if len(rest) < 1 { out_err(80, "input", "usage: file put|get|list|delete …", "") }
+        if rest[0] == "put" { file_put(shift(rest, 1)) }
+        if rest[0] == "get" { file_get(shift(rest, 1)) }
+        if rest[0] == "list" { file_list() }
+        if rest[0] == "delete" { file_delete(shift(rest, 1)) }
+        out_err(80, "input", "unknown file subcommand", "")
+    }
+    usage()
+}

@@ -1,0 +1,50 @@
+// poche bench — CRUD + indexed find at N docs (default 100k) over grange.
+
+func cmd_bench(args) {
+    n := 100000
+    i := 0
+    while i < len(args) {
+        if args[i] == "--n" && i + 1 < len(args) { n = parse_int(args[i + 1]) }
+        i = i + 1
+    }
+    if n < 1 { n = 1000 }
+    db := poche_db()
+    // isolate bench data
+    coll := "_bench"
+    ensure_meta()
+    schema_put(coll, "k:string,score:int,status:string", 0, "")
+    st_use(coll)
+    st_index(coll, "status")
+    st_index(coll, "score")
+
+    t0 := now_ms()
+    i = 0
+    while i < n {
+        id := "b" + str(i)
+        st := "active"
+        if i % 3 == 0 { st = "paused" }
+        doc := "{\"k\":\"user-" + str(i) + "\",\"score\":" + str(i % 1000) + ",\"status\":\"" + st + "\"}"
+        gr_put(id, doc)
+        if i % 1000 == 999 { gr_commit() }
+        i = i + 1
+    }
+    gr_commit()
+    t1 := now_ms()
+    insert_ms := t1 - t0
+
+    t2 := now_ms()
+    d := q_find("status=paused", 50)
+    t3 := now_ms()
+    find_ms := t3 - t2
+    cv, _ := json_get(d, ".count")
+
+    t4 := now_ms()
+    g, found := gr_get("b777")
+    t5 := now_ms()
+    get_us := (t5 - t4) * 1000
+    if found == 0 { get_us = -1 }
+
+    cn := st_count(coll, "status=paused")
+
+    out_ok("{\"n\":" + str(n) + ",\"insert_ms\":" + str(insert_ms) + ",\"insert_docs_per_s\":" + str((n * 1000) / (insert_ms + 1)) + ",\"find_paused_limit50_ms\":" + str(find_ms) + ",\"find_count\":" + unq(cv) + ",\"count_paused\":" + str(cn) + ",\"get_b777_approx_us\":" + str(get_us) + ",\"db\":\"" + jesc_p(db) + "\",\"engine\":\"grange\"}")
+}

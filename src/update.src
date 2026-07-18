@@ -1,0 +1,95 @@
+// poche update — cli-update-spec: content-hash verify-then-swap.
+
+func poche_version() (v) { v = "0.1.0" }
+
+func h_version() (res) {
+    // Prefer hashing a published artifact when POCHE_DIST is set (hosted).
+    dist := env("POCHE_DIST")
+    if len(dist) > 0 {
+        b := read_file(dist)
+        if len(b) > 0 {
+            full := sha256(b)
+            ver := substr(full, 0, 12)
+            res = srv_ok("{\"version\":\"" + ver + "\",\"download\":\"/dl/poche\",\"sha256\":\"" + full + "\"}")
+            return
+        }
+    }
+    res = srv_ok("{\"version\":\"" + poche_version() + "\",\"download\":\"https://github.com/javimosch/poche/releases/latest/download/poche-linux-amd64\"}")
+}
+
+func cmd_version() {
+    out_ok("{\"version\":\"" + poche_version() + "\",\"tool\":\"poche\"}")
+}
+
+func cmd_update(args) {
+    check_only := 0
+    force := 0
+    i := 0
+    while i < len(args) {
+        if args[i] == "--check" { check_only = 1 }
+        if args[i] == "--force" { force = 1 }
+        i = i + 1
+    }
+    base := env("POCHE_UPDATE_BASE")
+    if len(base) == 0 { base = "https://github.com/javimosch/poche/releases/latest/download" }
+    url := env("POCHE_UPDATE_URL")
+    if len(url) == 0 { url = base + "/poche-linux-amd64" }
+    ver_url := env("POCHE_VERSION_URL")
+    if len(ver_url) == 0 { ver_url = "https://javimosch.github.io/poche/version.json" }
+
+    eprint("{\"event\":\"update_check\",\"version_url\":\"" + jesc_p(ver_url) + "\"}")
+    status, vbody, verr := http_request("GET", ver_url, []string{}, "")
+    remote_ver := ""
+    remote_sha := ""
+    if status == 200 && len(verr) == 0 {
+        rv, _ := json_get(vbody, ".version")
+        remote_ver = unq(rv)
+        rs, _ := json_get(vbody, ".sha256")
+        remote_sha = unq(rs)
+        du, _ := json_get(vbody, ".download")
+        if len(unq(du)) > 0 { url = unq(du) }
+    }
+    local := poche_version()
+    if check_only == 1 {
+        up := "false"
+        if len(remote_ver) > 0 && remote_ver == local { up = "true" }
+        out_ok("{\"local\":\"" + local + "\",\"remote\":\"" + jesc_p(remote_ver) + "\",\"up_to_date\":" + up + "}")
+    }
+    if force == 0 && len(remote_ver) > 0 && remote_ver == local {
+        out_ok("{\"version\":\"" + local + "\",\"up_to_date\":true}")
+    }
+
+    eprint("{\"event\":\"update_fetch\",\"url\":\"" + jesc_p(url) + "\"}")
+    status2, body, herr := http_request("GET", url, []string{}, "")
+    if len(herr) > 0 || status2 != 200 {
+        out_err(100, "integration", "download failed", "check network or POCHE_UPDATE_URL")
+    }
+    if len(body) < 100 { out_err(100, "integration", "artifact too small", "release may be missing") }
+    full := sha256(body)
+    got12 := substr(full, 0, 12)
+    if len(remote_sha) >= 12 {
+        want := substr(remote_sha, 0, 12)
+        if got12 != want { out_err(100, "integration", "sha256 mismatch " + got12 + " != " + want, "refuse to install") }
+    } else if len(remote_ver) == 12 && got12 != remote_ver {
+        out_err(100, "integration", "version hash mismatch", "refuse to install")
+    }
+
+    self := env("POCHE_BIN")
+    if len(self) == 0 {
+        argv := args()
+        self = argv[0]
+    }
+    tmp := self + ".new"
+    bak := self + ".bak"
+    if write_file(tmp, body) < 0 { out_err(110, "internal", "cannot write " + tmp, "") }
+    // smoke: new binary must respond to version (best-effort via size check; exec probe is OS)
+    if len(body) < 10000 { out_err(100, "integration", "smoke: binary suspiciously small", "") }
+
+    // atomic swap: current → .bak, new → in place (same directory)
+    // MFL has no rename; write new then instruct — use system when available
+    rc := system("cp -f \"" + self + "\" \"" + bak + "\" && cp -f \"" + tmp + "\" \"" + self + "\" && chmod +x \"" + self + "\" && rm -f \"" + tmp + "\"")
+    if rc != 0 {
+        out_err(110, "internal", "swap failed (exit " + str(rc) + "); backup at " + bak, "restore: cp " + bak + " " + self)
+    }
+    out_ok("{\"updated\":true,\"from\":\"" + local + "\",\"to\":\"" + got12 + "\",\"backup\":\"" + jesc_p(bak) + "\"}")
+}

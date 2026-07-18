@@ -1,0 +1,80 @@
+// poche store — thin facade over the grange engine (embed via vendor/grange).
+// One db directory; each CMS collection is a grange collection.
+
+func st_use(coll) (ok) {
+    ok = 0
+    uok, uerr := gr_use(poche_db(), coll)
+    if uok == 0 { return }
+    ok = 1
+}
+
+func st_put(coll, id, doc) (ok) {
+    ok = 0
+    if st_use(coll) == 0 { return }
+    if valid_id(id) == 0 { return }
+    if valid_doc(doc) == 0 { return }
+    gr_put(id, doc)
+    if gr_commit() == 0 { return }
+    ok = 1
+}
+
+func st_get(coll, id) (doc, found) {
+    doc = ""
+    found = 0
+    if st_use(coll) == 0 { return }
+    doc, found = gr_get(id)
+}
+
+func st_del(coll, id) (ok) {
+    ok = 0
+    if st_use(coll) == 0 { return }
+    existed := gr_del(id)
+    if existed == 0 { return }
+    if gr_commit() == 0 { return }
+    ok = 1
+}
+
+func st_find(coll, where, limit) (data) {
+    data = "{\"count\":0,\"items\":[]}"
+    if st_use(coll) == 0 { return }
+    data = q_find(where, limit)
+}
+
+func st_count(coll, where) (n) {
+    n = -1
+    if st_use(coll) == 0 { return }
+    d := q_count(where)
+    v, err := json_get(d, ".count")
+    if len(err) == 0 { n = parse_int(v) }
+}
+
+func st_all(coll, limit) (data) {
+    data = st_find(coll, "", limit)
+}
+
+func st_find1(coll, field, value) (doc, id, found) {
+    doc = ""
+    id = ""
+    found = 0
+    data := st_find(coll, field + "=" + value, 1)
+    cv, cerr := json_get(data, ".count")
+    if len(cerr) > 0 || parse_int(cv) < 1 { return }
+    iv, ierr := json_get(data, ".items[0].id")
+    dv, derr := json_get(data, ".items[0].doc")
+    if len(ierr) > 0 || len(derr) > 0 { return }
+    id = unq(iv)
+    doc = dv
+    found = 1
+}
+
+func st_index(coll, field) (ok) {
+    ok = 0
+    if st_use(coll) == 0 { return }
+    ok = gr_index_add(field, "", "")
+}
+
+func st_seq(coll) (n) {
+    n = 0
+    if st_use(coll) == 0 { return }
+    n = g_seq
+}

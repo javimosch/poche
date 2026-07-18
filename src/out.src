@@ -1,0 +1,46 @@
+// poche — agent-first output contract (cli-output-spec).
+// stdout = data JSON; stderr = typed errors; exit codes 80–119.
+
+func jesc_p(s) (out) {
+    out = replace(s, "\\", "\\\\")
+    out = replace(out, "\"", "\\\"")
+    out = replace(out, "\n", "\\n")
+    out = replace(out, "\t", "\\t")
+}
+
+func eprint(s) { n := write(2, s + "\n") }
+
+func out_ok(dataJson) {
+    println("{\"ok\":true,\"version\":\"0.1.0\",\"data\":" + dataJson + "}")
+    exit(0)
+}
+
+func out_ok_keep(dataJson) {
+    println("{\"ok\":true,\"version\":\"0.1.0\",\"data\":" + dataJson + "}")
+}
+
+func out_err(code, typ, msg, suggestion) {
+    rec := "false"
+    if code >= 100 && code < 110 { rec = "true" }
+    sug := ""
+    if len(suggestion) > 0 { sug = ",\"suggestions\":[\"" + jesc_p(suggestion) + "\"]" }
+    eprint("{\"ok\":false,\"error\":{\"code\":" + str(code) + ",\"type\":\"" + typ + "\",\"message\":\"" + jesc_p(msg) + "\",\"recoverable\":" + rec + sug + "}}")
+    exit(code)
+}
+
+func unq(s) (r) {
+    r = s
+    if len(s) >= 2 {
+        if substr(s, 0, 1) == "\"" { r = substr(s, 1, len(s) - 1) }
+    }
+}
+
+// g_tenant_db set by cloud.src when a pt_ tenant token is active
+var g_tenant_db = ""
+var g_cloud_admin = 0
+
+func poche_db() (d) {
+    if len(g_tenant_db) > 0 { d = g_tenant_db  return }
+    d = env("POCHE_DB")
+    if len(d) == 0 { d = "./poche.data" }
+}

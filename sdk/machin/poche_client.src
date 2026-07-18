@@ -1,0 +1,88 @@
+// poche client SDK for machin (MFL) — thin typed wrapper over poche serve HTTP.
+//
+//   machin encode sdk/machin/poche_client.src yourapp.src > app.mfl
+//
+//   p := poche_client("http://127.0.0.1:7700", "TOKEN")
+//   id, ok := poche_create(p, "articles", "{\"title\":\"Hi\",\"views\":1,\"published\":true}")
+//   rows := poche_list(p, "articles", "published=true", 50)
+//   w := poche_watch(p, "articles", 0, 5)
+
+type Poche struct { base string  token string }
+
+func poche_unq(s) (r) {
+    r = s
+    if len(s) >= 2 && substr(s, 0, 1) == "\"" { r = substr(s, 1, len(s) - 1) }
+}
+
+func poche_client(base, token) (p) {
+    p = Poche{base: base, token: token}
+}
+
+func poche_req(p, method, path, body) (status, resp) {
+    status, resp, herr := http_request(method, p.base + path, []string{"content-type: application/json", "authorization: Bearer " + p.token}, body)
+    if len(herr) > 0 { status = 0  resp = "{\"ok\":false,\"error\":{\"type\":\"network\",\"message\":\"" + herr + "\"}}" }
+}
+
+func poche_data(status, resp) (data) {
+    data = ""
+    if status != 200 { return }
+    v, err := json_get(resp, ".data")
+    if len(err) == 0 { data = v }
+}
+
+func poche_list(p, coll, where, limit) (data) {
+    qs := "/api/" + coll + "?limit=" + str(limit)
+    if len(where) > 0 { qs = qs + "&where=" + url_encode(where) }
+    status, resp := poche_req(p, "GET", qs, "")
+    data = poche_data(status, resp)
+}
+
+func poche_get(p, coll, id) (doc, found) {
+    doc = ""
+    found = 0
+    status, resp := poche_req(p, "GET", "/api/" + coll + "/" + id, "")
+    d := poche_data(status, resp)
+    if len(d) == 0 { return }
+    v, err := json_get(d, ".doc")
+    if len(err) > 0 { return }
+    doc = v
+    found = 1
+}
+
+func poche_create(p, coll, doc) (id, ok) {
+    id = ""
+    ok = 0
+    status, resp := poche_req(p, "POST", "/api/" + coll, doc)
+    d := poche_data(status, resp)
+    if len(d) == 0 { return }
+    v, err := json_get(d, "._id")
+    if len(err) > 0 { return }
+    id = poche_unq(v)
+    ok = 1
+}
+
+func poche_update(p, coll, id, doc) (ok) {
+    ok = 0
+    status, resp := poche_req(p, "PUT", "/api/" + coll + "/" + id, doc)
+    if status == 200 { ok = 1 }
+}
+
+func poche_delete(p, coll, id) (ok) {
+    ok = 0
+    status, resp := poche_req(p, "DELETE", "/api/" + coll + "/" + id, "")
+    if status == 200 { ok = 1 }
+}
+
+func poche_watch(p, coll, since, timeout) (data) {
+    status, resp := poche_req(p, "GET", "/watch?coll=" + url_encode(coll) + "&since=" + str(since) + "&timeout=" + str(timeout), "")
+    data = poche_data(status, resp)
+}
+
+func poche_file(p, id) (body, ok) {
+    body = ""
+    ok = 0
+    status, resp, herr := http_request("GET", p.base + "/files/" + id, []string{"authorization: Bearer " + p.token}, "")
+    if len(herr) > 0 || status != 200 { return }
+    body = resp
+    ok = 1
+}

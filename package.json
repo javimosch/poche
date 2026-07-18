@@ -1,0 +1,6 @@
+{
+  "name": "poche",
+  "description": "Agent-first headless CMS over grange — one machin binary, no UI",
+  "version": "0.1.0",
+  "private": true
+}

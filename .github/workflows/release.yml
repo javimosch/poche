@@ -1,0 +1,35 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout grange + machin
+        run: |
+          git clone --depth 1 https://github.com/javimosch/grange.git ../grange
+          git clone --depth 1 https://github.com/javimosch/machin.git ../machin
+      - name: Install machin
+        run: |
+          (cd ../machin && go build -o machin .)
+          sudo cp ../machin/machin /usr/local/bin/machin
+          sudo apt-get update -qq && sudo apt-get install -y -qq gcc
+      - name: Build
+        run: |
+          ./build.sh
+          cp poche poche-linux-amd64
+          sha256sum poche-linux-amd64 | tee SHA256SUMS.txt
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            poche-linux-amd64
+            SHA256SUMS.txt
+          generate_release_notes: true

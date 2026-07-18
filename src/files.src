@@ -1,0 +1,42 @@
+// poche files — blob storage on disk; metadata in the _files collection.
+
+func files_dir() (p) {
+    p = poche_db() + "/_blobs"
+}
+
+func file_put(args) {
+    if len(args) < 2 { out_err(80, "input", "usage: file put <name> <path-or-->", "poche file put avatar.png ./a.png") }
+    name := args[0]
+    src := args[1]
+    body := ""
+    if src == "-" {
+        out_err(81, "input", "stdin put not yet supported; pass a file path", "")
+    }
+    body = read_file(src)
+    if len(body) == 0 { out_err(90, "not_found", "empty or missing file: " + src, "") }
+    id := to_hex(rand_bytes(8))
+    mkdir(files_dir())
+    dest := files_dir() + "/" + id
+    if write_file(dest, body) < 0 { out_err(110, "internal", "failed to write blob", "") }
+    doc := "{\"name\":\"" + jesc_p(name) + "\",\"bytes\":" + str(len(body)) + ",\"path\":\"" + jesc_p(dest) + "\"}"
+    if st_put("_files", id, doc) == 0 { out_err(110, "internal", "meta write failed", "") }
+    out_ok("{\"_id\":\"" + id + "\",\"name\":\"" + jesc_p(name) + "\",\"bytes\":" + str(len(body)) + "}")
+}
+
+func file_get(args) {
+    if len(args) < 1 { out_err(80, "input", "usage: file get <id>", "") }
+    d, found := st_get("_files", args[0])
+    if found == 0 { out_err(90, "not_found", "no file " + args[0], "") }
+    out_ok(d)
+}
+
+func file_list() { out_ok(st_all("_files", 0)) }
+
+func file_delete(args) {
+    if len(args) < 1 { out_err(80, "input", "usage: file delete <id>", "") }
+    d, found := st_get("_files", args[0])
+    if found == 0 { out_err(90, "not_found", "no file " + args[0], "") }
+    // best-effort unlink via overwrite empty (no unlink builtin required)
+    if st_del("_files", args[0]) == 0 { out_err(110, "internal", "meta delete failed", "") }
+    out_ok("{\"deleted\":1,\"_id\":\"" + jesc_p(args[0]) + "\"}")
+}

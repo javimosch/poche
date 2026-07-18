@@ -1,0 +1,86 @@
+// poche auth — users / roles / permissions + init seed (admin token).
+
+func ensure_meta() {
+    if st_use("_schemas") == 0 { out_err(110, "internal", "cannot open _schemas", "check POCHE_DB") }
+    if st_use("users") == 0 { out_err(110, "internal", "cannot open users", "") }
+    if st_use("roles") == 0 { out_err(110, "internal", "cannot open roles", "") }
+    if st_use("permissions") == 0 { out_err(110, "internal", "cannot open permissions", "") }
+    st_index("users", "token")
+    st_index("users", "username")
+    st_index("roles", "name")
+    st_index("permissions", "role")
+}
+
+func role_add(args) {
+    if len(args) < 1 { out_err(80, "input", "usage: role add <name>", "") }
+    _, found := st_get("roles", args[0])
+    if found == 1 { out_err(91, "exists", "role already exists: " + args[0], "") }
+    doc := "{\"name\":\"" + jesc_p(args[0]) + "\"}"
+    if st_put("roles", args[0], doc) == 0 { out_err(110, "internal", "write failed", "") }
+    out_ok("{\"role\":\"" + jesc_p(args[0]) + "\"}")
+}
+
+func role_list() { out_ok(st_all("roles", 0)) }
+
+func grant_cmd(args) {
+    if len(args) < 3 { out_err(80, "input", "usage: grant <role> <collection> <actions>", "") }
+    id := args[0] + "__" + args[1]
+    doc := "{\"role\":\"" + jesc_p(args[0]) + "\",\"collection\":\"" + jesc_p(args[1]) + "\",\"actions\":\"" + jesc_p(args[2]) + "\"}"
+    if st_put("permissions", id, doc) == 0 { out_err(110, "internal", "write failed", "") }
+    out_ok(doc)
+}
+
+func user_add(args) {
+    if len(args) < 2 { out_err(80, "input", "usage: user add <username> <role>", "") }
+    _, found := st_get("users", args[0])
+    if found == 1 { out_err(91, "exists", "user already exists: " + args[0], "") }
+    token := to_hex(rand_bytes(16))
+    doc := "{\"username\":\"" + jesc_p(args[0]) + "\",\"role\":\"" + jesc_p(args[1]) + "\",\"token\":\"" + token + "\"}"
+    if st_put("users", args[0], doc) == 0 { out_err(110, "internal", "write failed", "") }
+    out_ok(doc)
+}
+
+func user_list() { out_ok(st_all("users", 0)) }
+
+func user_by_token(token) (doc, found) {
+    doc = ""
+    found = 0
+    if len(token) == 0 { return }
+    d, id, ok := st_find1("users", "token", token)
+    if ok == 0 { return }
+    doc = d
+    found = 1
+}
+
+func allowed(token, coll, action) (yes) {
+    yes = 0
+    if g_cloud_admin == 1 { yes = 1  return }
+    u, found := user_by_token(token)
+    if found == 0 { return }
+    rv, _ := json_get(u, ".role")
+    role := unq(rv)
+    if role == "admin" { yes = 1  return }
+    perm, pok := st_get("permissions", role + "__" + coll)
+    if pok == 0 { return }
+    av, _ := json_get(perm, ".actions")
+    acts := "," + unq(av) + ","
+    if contains(acts, "," + action + ",") { yes = 1 }
+}
+
+func poche_init() {
+    ensure_meta()
+    _, rfound := st_get("roles", "admin")
+    if rfound == 0 {
+        st_put("roles", "admin", "{\"name\":\"admin\"}")
+    }
+    token := ""
+    existing, ufound := st_get("users", "admin")
+    if ufound == 0 {
+        token = to_hex(rand_bytes(16))
+        st_put("users", "admin", "{\"username\":\"admin\",\"role\":\"admin\",\"token\":\"" + token + "\"}")
+    } else {
+        tv, _ := json_get(existing, ".token")
+        token = unq(tv)
+    }
+    out_ok("{\"initialized\":true,\"admin_token\":\"" + token + "\",\"db\":\"" + jesc_p(poche_db()) + "\"}")
+}

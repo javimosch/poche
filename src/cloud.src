@@ -1,0 +1,97 @@
+// poche cloud — multi-tenant overlay (OSS binary, hosted mode via POCHE_CLOUD=1).
+// Signup: POST /tenants with X-Peage-Wallet → {tenant, token}.
+// Each tenant gets an isolated db dir under POCHE_DB/tenants/<tid>/.
+
+var g_cloud_tok = make(map[string]string)
+var g_cloud_loaded = 0
+
+func cloud_on() (yes) {
+    yes = 0
+    if env("POCHE_CLOUD") == "1" { yes = 1 }
+}
+
+func cloud_root() (d) {
+    d = env("POCHE_DB")
+    if len(d) == 0 { d = "./poche.data" }
+}
+
+func tenant_db(tid) (d) {
+    d = cloud_root() + "/tenants/" + tid
+}
+
+func cloud_load() {
+    if g_cloud_loaded == 1 { return }
+    g_cloud_loaded = 1
+    prev := g_tenant_db
+    g_tenant_db = ""
+    uok, _ := gr_use(cloud_root(), "_tenants")
+    g_tenant_db = prev
+    if uok == 0 { return }
+    ids := keys(g_mem)
+    i := 0
+    while i < len(ids) {
+        doc := g_mem[ids[i]]
+        tv, _ := json_get(doc, ".token")
+        tidv, _ := json_get(doc, ".tenant")
+        tok := unq(tv)
+        tid := unq(tidv)
+        if len(tok) > 0 && len(tid) > 0 { g_cloud_tok[tok] = tid }
+        i = i + 1
+    }
+}
+
+func cloud_resolve(tok) (tid, ok) {
+    tid = ""
+    ok = 0
+    if cloud_on() == 0 { return }
+    cloud_load()
+    if len(tok) == 0 { return }
+    t := g_cloud_tok[tok]
+    if len(t) == 0 { return }
+    tid = t
+    ok = 1
+}
+
+func cloud_activate(tok) (ok) {
+    ok = 0
+    g_tenant_db = ""
+    g_cloud_admin = 0
+    if cloud_on() == 0 { ok = 1  return }
+    tid, found := cloud_resolve(tok)
+    if found == 0 { return }
+    g_tenant_db = tenant_db(tid)
+    mkdir(g_tenant_db)
+    // pt_ tenant token is admin for its namespace
+    g_cloud_admin = 1
+    ok = 1
+}
+
+func h_tenants(req) (res) {
+    if cloud_on() == 0 {
+        res = srv_err("404 Not Found", "not_found", "cloud mode off (set POCHE_CLOUD=1)")
+        return
+    }
+    wallet := header(req, "x-peage-wallet")
+    if len(wallet) < 4 {
+        res = srv_err("400 Bad Request", "input", "X-Peage-Wallet required")
+        return
+    }
+    tid := "t" + to_hex(rand_bytes(8))
+    token := "pt_" + to_hex(rand_bytes(16))
+    mkdir(tenant_db(tid))
+    g_tenant_db = ""
+    doc := "{\"tenant\":\"" + tid + "\",\"token\":\"" + token + "\",\"wallet\":\"" + jesc_p(wallet) + "\",\"created\":" + str(now_ms()) + "}"
+    if st_put("_tenants", tid, doc) == 0 {
+        res = srv_err("500 Internal Server Error", "internal", "tenant persist failed")
+        return
+    }
+    g_cloud_tok[token] = tid
+    // seed admin inside tenant db
+    g_tenant_db = tenant_db(tid)
+    ensure_meta()
+    atok := to_hex(rand_bytes(16))
+    st_put("roles", "admin", "{\"name\":\"admin\"}")
+    st_put("users", "admin", "{\"username\":\"admin\",\"role\":\"admin\",\"token\":\"" + atok + "\"}")
+    g_tenant_db = ""
+    res = srv_ok("{\"tenant\":\"" + tid + "\",\"token\":\"" + token + "\",\"admin_token\":\"" + atok + "\",\"pricing\":{\"note\":\"storage metered via peage when POCHE_MERCHANT_KEY set\",\"peage\":\"https://peage.intrane.fr/llms.txt\"}}")
+}

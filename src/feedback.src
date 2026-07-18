@@ -1,0 +1,45 @@
+// poche feedback — cli-feedback-spec: local store + optional central relay.
+
+func h_feedback(req) (res) {
+    if len(req.body) > 16384 {
+        res = srv_err("413 Payload Too Large", "input", "feedback too large")
+        return
+    }
+    mv, merr := json_get(req.body, ".message")
+    msg := ""
+    if len(merr) == 0 { msg = trim(unq(mv)) }
+    if len(msg) == 0 {
+        res = srv_err("400 Bad Request", "input", "message required")
+        return
+    }
+    idv, _ := json_get(req.body, ".id")
+    id := unq(idv)
+    if len(id) == 0 { id = to_hex(rand_bytes(16)) }
+    kv, _ := json_get(req.body, ".kind")
+    cv, _ := json_get(req.body, ".context")
+    rv, _ := json_get(req.body, ".reporter")
+    vv, _ := json_get(req.body, ".version")
+    doc := "{\"id\":\"" + id + "\",\"kind\":\"" + jesc_p(unq(kv)) + "\",\"message\":\"" + jesc_p(msg) + "\",\"context\":\"" + jesc_p(unq(cv)) + "\",\"reporter\":\"" + jesc_p(unq(rv)) + "\",\"version\":\"" + jesc_p(unq(vv)) + "\",\"created\":" + str(now_ms()) + "}"
+    // idempotent: ignore if exists
+    _, exists := st_get("_feedback", id)
+    if exists == 0 { st_put("_feedback", id, doc) }
+    res = srv_ok("{\"id\":\"" + id + "\",\"stored\":true}")
+}
+
+func cmd_feedback(args) {
+    if len(args) < 1 { out_err(80, "input", "usage: poche feedback <message>", "") }
+    msg := join(args, " ")
+    id := to_hex(rand_bytes(16))
+    doc := "{\"id\":\"" + id + "\",\"kind\":\"feedback\",\"message\":\"" + jesc_p(msg) + "\",\"context\":\"cli\",\"reporter\":\"\",\"version\":\"0.1.0\",\"created\":" + str(now_ms()) + "}"
+    st_put("_feedback", id, doc)
+    // dual-write relay (never fail caller)
+    relay := env("FEEDBACK_RELAY")
+    if relay != "off" {
+        url := "https://feedback.intrane.fr/v1/feedback"
+        if len(relay) > 0 && relay != "on" { url = relay }
+        body := "{\"id\":\"" + id + "\",\"kind\":\"feedback\",\"message\":\"" + jesc_p(msg) + "\",\"tool\":\"poche\",\"version\":\"0.1.0\"}"
+        status, resp, herr := http_request("POST", url, []string{"content-type: application/json"}, body)
+        if len(herr) > 0 || status == 0 { eprint("{\"event\":\"relay_skip\",\"reason\":\"network\"}") }
+    }
+    out_ok("{\"id\":\"" + id + "\",\"stored\":true}")
+}

@@ -1,0 +1,97 @@
+// poche schema — collection field specs + expose flags (stored in _schemas).
+
+func fs_schemas() (s) { s = "name:string,fields:string,exposed:int,actions:string" }
+
+func schema_doc(name, fields, exposed, actions) (doc) {
+    doc = "{\"name\":\"" + jesc_p(name) + "\",\"fields\":\"" + jesc_p(fields) + "\",\"exposed\":" + str(exposed) + ",\"actions\":\"" + jesc_p(actions) + "\"}"
+}
+
+func schema_get(coll) (doc, found) {
+    doc, found = st_get("_schemas", coll)
+}
+
+func schema_put(name, fields, exposed, actions) (ok) {
+    ok = st_put("_schemas", name, schema_doc(name, fields, exposed, actions))
+}
+
+func field_type(fieldspec, name) (t) {
+    t = ""
+    parts := split(fieldspec, ",")
+    i := 0
+    while i < len(parts) {
+        p := parts[i]
+        c := index(p, ":")
+        if c > 0 {
+            if substr(p, 0, c) == name {
+                t = substr(p, c + 1, len(p))
+                return
+            }
+        }
+        i = i + 1
+    }
+}
+
+func schema_define(args) {
+    if len(args) < 1 { out_err(80, "input", "usage: schema define <collection> [field:type ...]", "poche schema define articles title:string views:int") }
+    name := args[0]
+    if name == "_schemas" || name == "users" || name == "roles" || name == "permissions" || name == "_files" || name == "_feedback" {
+        out_err(81, "input", "reserved collection name: " + name, "pick another name")
+    }
+    fields := ""
+    i := 1
+    while i < len(args) {
+        if i > 1 { fields = fields + "," }
+        fields = fields + args[i]
+        i = i + 1
+    }
+    exposed := 0
+    actions := ""
+    existing, found := schema_get(name)
+    if found == 1 {
+        ev, _ := json_get(existing, ".exposed")
+        exposed = parse_int(unq(ev))
+        av, _ := json_get(existing, ".actions")
+        actions = unq(av)
+    }
+    if schema_put(name, fields, exposed, actions) == 0 {
+        out_err(110, "internal", "failed to persist schema", "check POCHE_DB is writable")
+    }
+    // ensure collection dir exists
+    if st_use(name) == 0 { out_err(110, "internal", "failed to open collection " + name, "") }
+    out_ok("{\"collection\":\"" + jesc_p(name) + "\",\"fields\":\"" + jesc_p(fields) + "\"}")
+}
+
+func schema_list_cmd() {
+    out_ok(st_all("_schemas", 0))
+}
+
+func schema_get_cmd(args) {
+    if len(args) < 1 { out_err(80, "input", "usage: schema get <collection>", "") }
+    d, found := schema_get(args[0])
+    if found == 0 { out_err(90, "not_found", "no schema for " + args[0], "poche schema define " + args[0] + " …") }
+    out_ok(d)
+}
+
+func schema_expose_cmd(args, on) {
+    if len(args) < 1 { out_err(80, "input", "usage: schema expose <collection> <actions>", "") }
+    name := args[0]
+    d, found := schema_get(name)
+    if found == 0 { out_err(90, "not_found", "no schema for " + name, "") }
+    actions := ""
+    if on == 1 {
+        if len(args) < 2 { actions = "read" } else { actions = args[1] }
+    }
+    fv, _ := json_get(d, ".fields")
+    if schema_put(name, unq(fv), on, actions) == 0 { out_err(110, "internal", "persist failed", "") }
+    out_ok("{\"collection\":\"" + jesc_p(name) + "\",\"exposed\":" + str(on) + ",\"actions\":\"" + jesc_p(actions) + "\"}")
+}
+
+func schema_index_cmd(args) {
+    if len(args) < 2 { out_err(80, "input", "usage: schema index <collection> <field>", "") }
+    d, found := schema_get(args[0])
+    if found == 0 { out_err(90, "not_found", "no schema for " + args[0], "") }
+    fv, _ := json_get(d, ".fields")
+    if field_type(unq(fv), args[1]) == "" { out_err(81, "validation", "field not in schema: " + args[1], "") }
+    if st_index(args[0], args[1]) == 0 { out_err(110, "internal", "index failed", "") }
+    out_ok("{\"collection\":\"" + jesc_p(args[0]) + "\",\"field\":\"" + jesc_p(args[1]) + "\",\"indexed\":true}")
+}

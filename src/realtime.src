@@ -1,0 +1,68 @@
+// poche realtime — long-poll change feed over grange's per-collection seq/chg ring.
+
+func watch_payload(since) (data) {
+    items := []string{}
+    resync := 0
+    if since > g_seq { resync = 1 }
+    floor := g_seq - len(g_chg)
+    if floor < g_seq_base { floor = g_seq_base }
+    if since < floor { resync = 1 }
+    if resync == 0 {
+        i := 0
+        while i < len(g_chg) {
+            sv, serr := json_get(g_chg[i], ".seq")
+            if len(serr) == 0 && parse_int(sv) > since { items = append(items, g_chg[i]) }
+            i = i + 1
+        }
+    }
+    data = "{\"seq\":" + str(g_seq) + ",\"resync\":" + str(resync) + ",\"changes\":[" + join(items, ",") + "]}"
+}
+
+var g_w_fd = []int{}
+var g_w_coll = []string{}
+var g_w_since = []int{}
+var g_w_deadline = []int{}
+var g_park = 0
+
+func watch_park(fd, coll, since, timeout_s) {
+    g_w_fd = append(g_w_fd, fd)
+    g_w_coll = append(g_w_coll, coll)
+    g_w_since = append(g_w_since, since)
+    g_w_deadline = append(g_w_deadline, now_ms() + timeout_s * 1000)
+}
+
+func srv_write_raw(fd, status, body) {
+    out := "HTTP/1.1 " + status + "\r\nContent-Type: application/json\r\nContent-Length: " + str(len(body)) + "\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n" + body
+    write(fd, out)
+    close(fd)
+}
+
+func watch_tick() {
+    if len(g_w_fd) == 0 { return }
+    nowms := now_ms()
+    kfd := []int{}
+    kcoll := []string{}
+    ksince := []int{}
+    kdl := []int{}
+    i := 0
+    while i < len(g_w_fd) {
+        fire := 0
+        if st_use(g_w_coll[i]) == 0 { fire = 1 }
+        if g_seq > g_w_since[i] { fire = 1 }
+        if nowms >= g_w_deadline[i] { fire = 1 }
+        if fire == 1 {
+            body := "{\"ok\":true,\"data\":" + watch_payload(g_w_since[i]) + "}"
+            srv_write_raw(g_w_fd[i], "200 OK", body)
+        } else {
+            kfd = append(kfd, g_w_fd[i])
+            kcoll = append(kcoll, g_w_coll[i])
+            ksince = append(ksince, g_w_since[i])
+            kdl = append(kdl, g_w_deadline[i])
+        }
+        i = i + 1
+    }
+    g_w_fd = kfd
+    g_w_coll = kcoll
+    g_w_since = ksince
+    g_w_deadline = kdl
+}
