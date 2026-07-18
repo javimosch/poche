@@ -36,7 +36,9 @@ func file_delete(args) {
     if len(args) < 1 { out_err(80, "input", "usage: file delete <id>", "") }
     d, found := st_get("_files", args[0])
     if found == 0 { out_err(90, "not_found", "no file " + args[0], "") }
-    // best-effort unlink via overwrite empty (no unlink builtin required)
+    pv, _ := json_get(d, ".path")
+    path := unq(pv)
+    if len(path) > 0 { remove(path) }
     if st_del("_files", args[0]) == 0 { out_err(110, "internal", "meta delete failed", "") }
     out_ok("{\"deleted\":1,\"_id\":\"" + jesc_p(args[0]) + "\"}")
 }

@@ -32,7 +32,7 @@ func watch_park(fd, coll, since, timeout_s) {
 }
 
 func srv_write_raw(fd, status, body) {
-    out := "HTTP/1.1 " + status + "\r\nContent-Type: application/json\r\nContent-Length: " + str(len(body)) + "\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n" + body
+    out := "HTTP/1.1 " + status + "\r\nContent-Type: application/json\r\nContent-Length: " + str(len(body)) + "\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\nAccess-Control-Allow-Headers: Authorization, Content-Type, X-Peage-Wallet\r\nConnection: close\r\n\r\n" + body
     write(fd, out)
     close(fd)
 }

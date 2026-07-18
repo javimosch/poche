@@ -5,6 +5,10 @@ func srv_ok(data) (res) {
     res = response("200 OK", "application/json", "{\"ok\":true,\"data\":" + data + "}")
 }
 
+func srv_created(data) (res) {
+    res = response("201 Created", "application/json", "{\"ok\":true,\"data\":" + data + "}")
+}
+
 func srv_err(status, typ, msg) (res) {
     res = response(status, "application/json", "{\"ok\":false,\"error\":{\"type\":\"" + typ + "\",\"message\":\"" + jesc_p(msg) + "\"}}")
 }
@@ -56,6 +60,11 @@ func srv_handle(req) (res) {
     q := index(p, "?")
     if q >= 0 { p = substr(p, 0, q) }
 
+    if req.method == "OPTIONS" {
+        res = response("204 No Content", "application/json", "")
+        return
+    }
+
     if req.method == "GET" && (p == "/health" || p == "/_health") {
         res = srv_ok("{\"status\":\"ok\",\"tool\":\"poche\"}")
         return
@@ -100,8 +109,10 @@ func srv_handle(req) (res) {
     }
 
     if req.method == "GET" && (p == "/files" || has_prefix(p, "/files/")) {
-        u, uf := user_by_token(tok)
-        if uf == 0 && g_cloud_admin == 0 { res = srv_err("403 Forbidden", "auth", "token required")  return }
+        if allowed(tok, "_files", "read") == 0 {
+            res = srv_err("403 Forbidden", "auth", "token lacks _files read")
+            return
+        }
         fid := substr(p, 7, len(p))
         if has_prefix(fid, "/") { fid = substr(fid, 1, len(fid)) }
         if len(fid) == 0 {
@@ -158,6 +169,15 @@ func srv_handle(req) (res) {
         }
     }
 
+    if req.method == "GET" && id == "count" {
+        if exposed_ok(coll, "read") == 0 { res = srv_err("403 Forbidden", "forbidden", "not exposed")  return }
+        if allowed(tok, coll, "read") == 0 { res = srv_err("403 Forbidden", "auth", "token lacks read")  return }
+        n := st_count(coll, query(req, "where"))
+        if n < 0 { res = srv_err("500 Internal Server Error", "internal", "count failed")  return }
+        res = srv_ok("{\"count\":" + str(n) + "}")
+        return
+    }
+
     if req.method == "GET" && len(id) == 0 {
         if exposed_ok(coll, "read") == 0 { res = srv_err("403 Forbidden", "forbidden", "not exposed")  return }
         if allowed(tok, coll, "read") == 0 { res = srv_err("403 Forbidden", "auth", "token lacks read")  return }
@@ -205,7 +225,7 @@ func srv_handle(req) (res) {
         if cem != "" { res = srv_err("400 Bad Request", "validation", cem)  return }
         nid := to_hex(rand_bytes(8))
         if st_put(coll, nid, doc) == 0 { res = srv_err("500 Internal Server Error", "internal", "write failed")  return }
-        res = srv_ok("{\"_id\":\"" + nid + "\",\"doc\":" + doc + "}")
+        res = srv_created("{\"_id\":\"" + nid + "\",\"doc\":" + doc + "}")
         return
     }
     if req.method == "PUT" && len(id) > 0 {
@@ -284,7 +304,7 @@ func cmd_serve(args) {
                 if g_park > 0 {
                     watch_park(conn, park_coll, park_since, g_park)
                 } else {
-                    out := "HTTP/1.1 " + res.status + "\r\nContent-Type: " + res.ctype + "\r\nContent-Length: " + str(len(res.body)) + "\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n" + res.body
+                    out := "HTTP/1.1 " + res.status + "\r\nContent-Type: " + res.ctype + "\r\nContent-Length: " + str(len(res.body)) + "\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\nAccess-Control-Allow-Headers: Authorization, Content-Type, X-Peage-Wallet\r\nConnection: close\r\n\r\n" + res.body
                     write(conn, out)
                     close(conn)
                 }

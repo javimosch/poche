@@ -12,7 +12,7 @@
   <div class="flex items-start gap-4">
     <div class="w-12 h-12 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0"><span class="text-2xl">🛡️</span></div>
     <div>
-      <h3 class="text-xl font-semibold text-white mb-2">13 dogfood gaps fixed</h3>
+      <h3 class="text-xl font-semibold text-white mb-2">19 dogfood gaps fixed</h3>
       <p class="text-white/40 leading-relaxed">Required and unique fields, server timestamps, numeric bounds, references, safe SDK escaping, and strict schema validation make malformed application data fail early and predictably.</p>
     </div>
   </div>

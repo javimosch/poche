@@ -57,9 +57,10 @@ Run all three end-to-end:
 ```
 
 Building them found and fixed
-[13 concrete poche gaps](docs/dogfood-gaps.md): machine bootstrap, required and
+[19 concrete poche gaps](docs/dogfood-gaps.md): machine bootstrap, required and
 unique fields, server timestamps, bounds, references, atomic increment/CAS,
-pagination totals, bounded sorting, and SDK escaping.
+pagination totals, bounded sorting, SDK escaping, count/range APIs, file
+cleanup/RBAC, CORS and correct create semantics.
 
 ## Schema modifiers
 
@@ -73,7 +74,7 @@ seller_id:string!ref=sellers
 
 ## Agent contract
 
-- stdout = `{"ok":true,"version":"0.2.0","data":…}`
+- stdout = `{"ok":true,"version":"0.2.1","data":…}`
 - stderr = `{"ok":false,"error":{code,type,message,…}}`
 - exit: `0` · `80–89` input · `90–99` resource · `100–109` integration · `110–119` internal
 - `poche guide` · `poche help-json` · `poche feedback "…"` · `poche update`

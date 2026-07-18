@@ -68,9 +68,13 @@ func st_find1(coll, field, value) (doc, id, found) {
 }
 
 func st_index(coll, field) (ok) {
+    ok = st_index_kind(coll, field, "")
+}
+
+func st_index_kind(coll, field, kind) (ok) {
     ok = 0
     if st_use(coll) == 0 { return }
-    ok = gr_index_add(field, "", "")
+    ok = gr_index_add(field, "", kind)
 }
 
 func st_seq(coll) (n) {

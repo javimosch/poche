@@ -60,6 +60,12 @@ func h_admin_index(req, tok) (res) {
     }
     coll := unq(cv)
     field := unq(fv)
+    kv, _ := json_get(req.body, ".kind")
+    kind := unq(kv)
+    if kind != "" && kind != "range" {
+        res = srv_err("400 Bad Request", "validation", "index kind must be empty or range")
+        return
+    }
     schema, found := schema_get(coll)
     if found == 0 {
         res = srv_err("404 Not Found", "not_found", "no schema for " + coll)
@@ -70,11 +76,11 @@ func h_admin_index(req, tok) (res) {
         res = srv_err("400 Bad Request", "validation", "field not in schema: " + field)
         return
     }
-    if st_index(coll, field) == 0 {
+    if st_index_kind(coll, field, kind) == 0 {
         res = srv_err("500 Internal Server Error", "internal", "index failed")
         return
     }
-    res = srv_ok("{\"collection\":\"" + jesc_p(coll) + "\",\"field\":\"" + jesc_p(field) + "\",\"indexed\":true}")
+    res = srv_ok("{\"collection\":\"" + jesc_p(coll) + "\",\"field\":\"" + jesc_p(field) + "\",\"kind\":\"" + kind + "\",\"indexed\":true}")
 }
 
 func h_admin_expose(req, tok) (res) {

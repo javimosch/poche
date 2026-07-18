@@ -32,7 +32,7 @@ func poche_req(p, method, path, body) (status, resp) {
 
 func poche_data(status, resp) (data) {
     data = ""
-    if status != 200 { return }
+    if status != 200 && status != 201 { return }
     v, err := json_get(resp, ".data")
     if len(err) == 0 { data = v }
 }
@@ -45,8 +45,12 @@ func poche_schema(p, name, fields) (ok) {
 }
 
 func poche_index(p, coll, field) (ok) {
+    ok = poche_index_kind(p, coll, field, "")
+}
+
+func poche_index_kind(p, coll, field, kind) (ok) {
     ok = 0
-    body := "{\"collection\":\"" + poche_json_escape(coll) + "\",\"field\":\"" + poche_json_escape(field) + "\"}"
+    body := "{\"collection\":\"" + poche_json_escape(coll) + "\",\"field\":\"" + poche_json_escape(field) + "\",\"kind\":\"" + poche_json_escape(kind) + "\"}"
     status, resp := poche_req(p, "POST", "/admin/index", body)
     if status == 200 { ok = 1 }
 }
@@ -72,6 +76,17 @@ func poche_page(p, coll, where, limit, offset, sort_field, desc) (data) {
     if desc == 1 { qs = qs + "&order=desc" }
     status, resp := poche_req(p, "GET", qs, "")
     data = poche_data(status, resp)
+}
+
+func poche_count(p, coll, where) (n) {
+    n = -1
+    path := "/api/" + url_encode(coll) + "/count"
+    if len(where) > 0 { path = path + "?where=" + url_encode(where) }
+    status, resp := poche_req(p, "GET", path, "")
+    data := poche_data(status, resp)
+    if len(data) == 0 { return }
+    cv, ce := json_get(data, ".count")
+    if len(ce) == 0 { n = parse_int(cv) }
 }
 
 func poche_get(p, coll, id) (doc, found) {

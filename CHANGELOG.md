@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.1 — 2026-07-19
+
+### Fixed
+
+- Delete file blobs from disk, not only `_files` metadata
+- Enforce `_files read` RBAC on HTTP downloads
+- Return `201 Created` for REST creates and support it in the MFL SDK
+- Handle browser CORS preflight with explicit methods/headers
+
+### Added
+
+- `GET /api/:collection/count?where=…`
+- Equality/range index kind through CLI, admin API and SDK
+
 ## 0.2.0 — 2026-07-19
 
 ### Added

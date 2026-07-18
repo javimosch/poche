@@ -18,8 +18,14 @@ friction into a tested poche improvement.
 | 11 | Timelines, prices and fleet results could not be ordered | Numeric `sort` + ascending/descending query support | fixed |
 | 12 | Quotes/newlines in real titles, bios and names broke SDK-built JSON | SDK JSON escaping + URL-encoded path segments | fixed |
 | 13 | Public list routes could accidentally return/sort unbounded datasets | Default 50, max 1000, offset cap, numeric-sort validation | fixed |
+| 14 | File deletion left orphaned bytes on disk | Remove the blob before deleting `_files` metadata | fixed |
+| 15 | Any authenticated token could download files | Enforce `_files read` permission (admin still bypasses) | fixed |
+| 16 | Apps needed a full page just to count matches | `GET /api/:collection/count` + SDK `poche_count` | fixed |
+| 17 | grange range indexes were unreachable from poche | `schema index … --range`, admin `kind`, SDK helper | fixed |
+| 18 | Browser clients failed CORS preflight | OPTIONS 204 + explicit methods and headers | fixed |
+| 19 | REST creates returned 200 instead of resource semantics | POST now returns 201; SDK accepts 200/201 | fixed |
 
-The goal threshold is met: **13 concrete gaps fixed and exercised by the three
+The goal threshold is met: **19 concrete gaps fixed and exercised by the three
 compiled machin backends**.
 
 Target: at least 10 verified fixes before this dogfood goal is complete.
