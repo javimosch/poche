@@ -29,7 +29,7 @@ func json_lit(typ, v) (lit, err) {
     err = "unknown type " + typ
 }
 
-func build_doc(fieldspec, kvs) (doc, errmsg) {
+func build_doc_mode(fieldspec, kvs, require_all) (doc, errmsg) {
     doc = ""
     errmsg = ""
     parts := []string{}
@@ -47,13 +47,39 @@ func build_doc(fieldspec, kvs) (doc, errmsg) {
         parts = append(parts, "\"" + jesc_p(k) + "\":" + lit)
         i = i + 1
     }
+    if require_all == 1 {
+        specs := split(fieldspec, ",")
+        s := 0
+        while s < len(specs) {
+            sp := specs[s]
+            cut := index(sp, ":")
+            if cut > 0 {
+                required_name := substr(sp, 0, cut)
+                if field_required(fieldspec, required_name) == 1 {
+                    present := 0
+                    reqi := 0
+                    while reqi < len(kvs) {
+                        eq2 := index(kvs[reqi], "=")
+                        if eq2 > 0 && substr(kvs[reqi], 0, eq2) == required_name { present = 1 }
+                        reqi = reqi + 1
+                    }
+                    if present == 0 { errmsg = "required field missing: " + required_name  return }
+                }
+            }
+            s = s + 1
+        }
+    }
     doc = "{" + join(parts, ",") + "}"
+}
+
+func build_doc(fieldspec, kvs) (doc, errmsg) {
+    doc, errmsg = build_doc_mode(fieldspec, kvs, 1)
 }
 
 // doc_from_json rebuilds a canonical doc from a JSON body using the schema
 // (typed validation). Unknown JSON keys are ignored; at least one schema field
 // must be present. JSON token type must match the field type (no silent coerce).
-func doc_from_json(fieldspec, body) (doc, errmsg) {
+func doc_from_json_mode(fieldspec, body, require_all) (doc, errmsg) {
     doc = ""
     errmsg = ""
     if valid_doc(body) == 0 { errmsg = "body must be minified JSON object"  return }
@@ -65,7 +91,7 @@ func doc_from_json(fieldspec, body) (doc, errmsg) {
         c := index(p, ":")
         if c > 0 {
             k := substr(p, 0, c)
-            t := substr(p, c + 1, len(p))
+            t := field_type(fieldspec, k)
             got, gerr := json_get(body, "." + k)
             if len(gerr) == 0 {
                 quoted := 0
@@ -84,7 +110,11 @@ func doc_from_json(fieldspec, body) (doc, errmsg) {
         i = i + 1
     }
     if len(kvs) == 0 { errmsg = "no schema fields present in body"  return }
-    doc, errmsg = build_doc(fieldspec, kvs)
+    doc, errmsg = build_doc_mode(fieldspec, kvs, require_all)
+}
+
+func doc_from_json(fieldspec, body) (doc, errmsg) {
+    doc, errmsg = doc_from_json_mode(fieldspec, body, 1)
 }
 
 func data_create(args) {

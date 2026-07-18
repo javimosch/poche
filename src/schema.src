@@ -24,8 +24,58 @@ func field_type(fieldspec, name) (t) {
         if c > 0 {
             if substr(p, 0, c) == name {
                 t = substr(p, c + 1, len(p))
+                if has_suffix(t, "!") { t = substr(t, 0, len(t) - 1) }
                 return
             }
+        }
+        i = i + 1
+    }
+}
+
+func field_required(fieldspec, name) (yes) {
+    yes = 0
+    parts := split(fieldspec, ",")
+    i := 0
+    while i < len(parts) {
+        p := parts[i]
+        c := index(p, ":")
+        if c > 0 && substr(p, 0, c) == name {
+            raw := substr(p, c + 1, len(p))
+            if has_suffix(raw, "!") { yes = 1 }
+            return
+        }
+        i = i + 1
+    }
+}
+
+func schema_validate(fieldspec) (errmsg) {
+    errmsg = ""
+    if len(fieldspec) == 0 { errmsg = "schema needs at least one field"  return }
+    seen := make(map[string]int)
+    parts := split(fieldspec, ",")
+    i := 0
+    while i < len(parts) {
+        p := parts[i]
+        c := index(p, ":")
+        if c < 1 || c >= len(p) - 1 {
+            errmsg = "invalid field spec: " + p
+            return
+        }
+        name := substr(p, 0, c)
+        if contains(name, " ") || contains(name, ".") || contains(name, "/") {
+            errmsg = "invalid field name: " + name
+            return
+        }
+        if seen[name] == 1 {
+            errmsg = "duplicate field: " + name
+            return
+        }
+        seen[name] = 1
+        typ := substr(p, c + 1, len(p))
+        if has_suffix(typ, "!") { typ = substr(typ, 0, len(typ) - 1) }
+        if typ != "string" && typ != "int" && typ != "float" && typ != "bool" {
+            errmsg = "unsupported type for " + name + ": " + typ
+            return
         }
         i = i + 1
     }
@@ -44,6 +94,8 @@ func schema_define(args) {
         fields = fields + args[i]
         i = i + 1
     }
+    sem := schema_validate(fields)
+    if sem != "" { out_err(81, "validation", sem, "") }
     exposed := 0
     actions := ""
     existing, found := schema_get(name)

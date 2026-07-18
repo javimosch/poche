@@ -181,7 +181,7 @@ func srv_handle(req) (res) {
         fv, _ := json_get(s, ".fields")
         fieldspec := unq(fv)
         // merge: current fields + body overlay, then validate
-        patch, pem := doc_from_json(fieldspec, trim(req.body))
+        patch, pem := doc_from_json_mode(fieldspec, trim(req.body), 0)
         if pem != "" { res = srv_err("400 Bad Request", "validation", pem)  return }
         // rebuild merge of cur + patch field-by-field
         kvs := []string{}
