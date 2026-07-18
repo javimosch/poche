@@ -10,6 +10,8 @@ func tw_fail(msg) {
     exit(80)
 }
 
+func tw_j(s) (out) { out = poche_json_escape(s) }
+
 func tw_client() (p) {
     url := env("POCHE_URL")
     if len(url) == 0 { url = "http://127.0.0.1:7700" }
@@ -42,23 +44,23 @@ func tw_profile(p, a) {
     if len(a) < 2 { tw_fail("profile <username> <display_name> [bio]") }
     bio := ""
     if len(a) > 2 { bio = a[2] }
-    doc := "{\"username\":\"" + a[0] + "\",\"display_name\":\"" + a[1] + "\",\"bio\":\"" + bio + "\"}"
+    doc := "{\"username\":\"" + tw_j(a[0]) + "\",\"display_name\":\"" + tw_j(a[1]) + "\",\"bio\":\"" + tw_j(bio) + "\"}"
     id, ok := poche_create(p, "profiles", doc)
     if ok == 0 { tw_fail("profile create failed") }
-    tw_out("{\"id\":\"" + id + "\",\"username\":\"" + a[0] + "\"}")
+    tw_out("{\"id\":\"" + id + "\",\"username\":\"" + tw_j(a[0]) + "\"}")
 }
 
 func tw_post(p, a) {
     if len(a) < 2 { tw_fail("post <author> <body>") }
-    doc := "{\"author\":\"" + a[0] + "\",\"body\":\"" + a[1] + "\",\"likes\":0}"
+    doc := "{\"author\":\"" + tw_j(a[0]) + "\",\"body\":\"" + tw_j(a[1]) + "\",\"likes\":0}"
     id, ok := poche_create(p, "posts", doc)
     if ok == 0 { tw_fail("post create failed") }
-    tw_out("{\"id\":\"" + id + "\",\"author\":\"" + a[0] + "\"}")
+    tw_out("{\"id\":\"" + id + "\",\"author\":\"" + tw_j(a[0]) + "\"}")
 }
 
 func tw_follow(p, a) {
     if len(a) < 2 { tw_fail("follow <follower> <following>") }
-    doc := "{\"follower\":\"" + a[0] + "\",\"following\":\"" + a[1] + "\"}"
+    doc := "{\"follower\":\"" + tw_j(a[0]) + "\",\"following\":\"" + tw_j(a[1]) + "\"}"
     id, ok := poche_create(p, "follows", doc)
     if ok == 0 { tw_fail("follow failed") }
     tw_out("{\"id\":\"" + id + "\"}")
@@ -66,7 +68,7 @@ func tw_follow(p, a) {
 
 func tw_like(p, a) {
     if len(a) < 2 { tw_fail("like <username> <post_id>") }
-    doc := "{\"username\":\"" + a[0] + "\",\"post_id\":\"" + a[1] + "\"}"
+    doc := "{\"username\":\"" + tw_j(a[0]) + "\",\"post_id\":\"" + tw_j(a[1]) + "\"}"
     id, ok := poche_create(p, "likes", doc)
     if ok == 0 { tw_fail("like failed") }
     tw_out("{\"id\":\"" + id + "\"}")

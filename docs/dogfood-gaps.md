@@ -16,8 +16,9 @@ friction into a tested poche improvement.
 | 9 | Two buyers could both reserve the same last stock | Atomic `/compare-swap` with HTTP 409 on stale value | fixed |
 | 10 | Fleet/catalog pages could not request the next page or know total matches | `offset` pagination with stable `count` + `total` metadata | fixed |
 | 11 | Timelines, prices and fleet results could not be ordered | Numeric `sort` + ascending/descending query support | fixed |
+| 12 | Quotes/newlines in real titles, bios and names broke SDK-built JSON | SDK JSON escaping + URL-encoded path segments | fixed |
 
-The goal threshold is met: **11 concrete gaps fixed and exercised by the three
+The goal threshold is met: **12 concrete gaps fixed and exercised by the three
 compiled machin backends**.
 
 Target: at least 10 verified fixes before this dogfood goal is complete.

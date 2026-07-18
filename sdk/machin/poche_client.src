@@ -9,6 +9,13 @@
 
 type Poche struct { base string  token string }
 
+func poche_json_escape(s) (out) {
+    out = replace(s, "\\", "\\\\")
+    out = replace(out, "\"", "\\\"")
+    out = replace(out, "\n", "\\n")
+    out = replace(out, "\t", "\\t")
+}
+
 func poche_unq(s) (r) {
     r = s
     if len(s) >= 2 && substr(s, 0, 1) == "\"" { r = substr(s, 1, len(s) - 1) }
@@ -20,7 +27,7 @@ func poche_client(base, token) (p) {
 
 func poche_req(p, method, path, body) (status, resp) {
     status, resp, herr := http_request(method, p.base + path, []string{"content-type: application/json", "authorization: Bearer " + p.token}, body)
-    if len(herr) > 0 { status = 0  resp = "{\"ok\":false,\"error\":{\"type\":\"network\",\"message\":\"" + herr + "\"}}" }
+    if len(herr) > 0 { status = 0  resp = "{\"ok\":false,\"error\":{\"type\":\"network\",\"message\":\"" + poche_json_escape(herr) + "\"}}" }
 }
 
 func poche_data(status, resp) (data) {
@@ -32,34 +39,34 @@ func poche_data(status, resp) (data) {
 
 func poche_schema(p, name, fields) (ok) {
     ok = 0
-    body := "{\"name\":\"" + name + "\",\"fields\":\"" + fields + "\"}"
+    body := "{\"name\":\"" + poche_json_escape(name) + "\",\"fields\":\"" + poche_json_escape(fields) + "\"}"
     status, resp := poche_req(p, "POST", "/admin/schema", body)
     if status == 200 { ok = 1 }
 }
 
 func poche_index(p, coll, field) (ok) {
     ok = 0
-    body := "{\"collection\":\"" + coll + "\",\"field\":\"" + field + "\"}"
+    body := "{\"collection\":\"" + poche_json_escape(coll) + "\",\"field\":\"" + poche_json_escape(field) + "\"}"
     status, resp := poche_req(p, "POST", "/admin/index", body)
     if status == 200 { ok = 1 }
 }
 
 func poche_expose(p, coll, actions) (ok) {
     ok = 0
-    body := "{\"collection\":\"" + coll + "\",\"actions\":\"" + actions + "\"}"
+    body := "{\"collection\":\"" + poche_json_escape(coll) + "\",\"actions\":\"" + poche_json_escape(actions) + "\"}"
     status, resp := poche_req(p, "POST", "/admin/expose", body)
     if status == 200 { ok = 1 }
 }
 
 func poche_list(p, coll, where, limit) (data) {
-    qs := "/api/" + coll + "?limit=" + str(limit)
+    qs := "/api/" + url_encode(coll) + "?limit=" + str(limit)
     if len(where) > 0 { qs = qs + "&where=" + url_encode(where) }
     status, resp := poche_req(p, "GET", qs, "")
     data = poche_data(status, resp)
 }
 
 func poche_page(p, coll, where, limit, offset, sort_field, desc) (data) {
-    qs := "/api/" + coll + "?limit=" + str(limit) + "&offset=" + str(offset)
+    qs := "/api/" + url_encode(coll) + "?limit=" + str(limit) + "&offset=" + str(offset)
     if len(where) > 0 { qs = qs + "&where=" + url_encode(where) }
     if len(sort_field) > 0 { qs = qs + "&sort=" + url_encode(sort_field) }
     if desc == 1 { qs = qs + "&order=desc" }
@@ -70,7 +77,7 @@ func poche_page(p, coll, where, limit, offset, sort_field, desc) (data) {
 func poche_get(p, coll, id) (doc, found) {
     doc = ""
     found = 0
-    status, resp := poche_req(p, "GET", "/api/" + coll + "/" + id, "")
+    status, resp := poche_req(p, "GET", "/api/" + url_encode(coll) + "/" + url_encode(id), "")
     d := poche_data(status, resp)
     if len(d) == 0 { return }
     v, err := json_get(d, ".doc")
@@ -82,7 +89,7 @@ func poche_get(p, coll, id) (doc, found) {
 func poche_create(p, coll, doc) (id, ok) {
     id = ""
     ok = 0
-    status, resp := poche_req(p, "POST", "/api/" + coll, doc)
+    status, resp := poche_req(p, "POST", "/api/" + url_encode(coll), doc)
     d := poche_data(status, resp)
     if len(d) == 0 { return }
     v, err := json_get(d, "._id")
@@ -93,26 +100,26 @@ func poche_create(p, coll, doc) (id, ok) {
 
 func poche_update(p, coll, id, doc) (ok) {
     ok = 0
-    status, resp := poche_req(p, "PUT", "/api/" + coll + "/" + id, doc)
+    status, resp := poche_req(p, "PUT", "/api/" + url_encode(coll) + "/" + url_encode(id), doc)
     if status == 200 { ok = 1 }
 }
 
 func poche_increment(p, coll, id, field, delta) (data) {
-    body := "{\"field\":\"" + field + "\",\"delta\":" + str(delta) + "}"
-    status, resp := poche_req(p, "POST", "/api/" + coll + "/" + id + "/increment", body)
+    body := "{\"field\":\"" + poche_json_escape(field) + "\",\"delta\":" + str(delta) + "}"
+    status, resp := poche_req(p, "POST", "/api/" + url_encode(coll) + "/" + url_encode(id) + "/increment", body)
     data = poche_data(status, resp)
 }
 
 func poche_compare_swap(p, coll, id, field, expect_json, value_json) (ok) {
     ok = 0
-    body := "{\"field\":\"" + field + "\",\"expect\":" + expect_json + ",\"value\":" + value_json + "}"
-    status, resp := poche_req(p, "POST", "/api/" + coll + "/" + id + "/compare-swap", body)
+    body := "{\"field\":\"" + poche_json_escape(field) + "\",\"expect\":" + expect_json + ",\"value\":" + value_json + "}"
+    status, resp := poche_req(p, "POST", "/api/" + url_encode(coll) + "/" + url_encode(id) + "/compare-swap", body)
     if status == 200 { ok = 1 }
 }
 
 func poche_delete(p, coll, id) (ok) {
     ok = 0
-    status, resp := poche_req(p, "DELETE", "/api/" + coll + "/" + id, "")
+    status, resp := poche_req(p, "DELETE", "/api/" + url_encode(coll) + "/" + url_encode(id), "")
     if status == 200 { ok = 1 }
 }
 
@@ -124,7 +131,7 @@ func poche_watch(p, coll, since, timeout) (data) {
 func poche_file(p, id) (body, ok) {
     body = ""
     ok = 0
-    status, resp, herr := http_request("GET", p.base + "/files/" + id, []string{"authorization: Bearer " + p.token}, "")
+    status, resp, herr := http_request("GET", p.base + "/files/" + url_encode(id), []string{"authorization: Bearer " + p.token}, "")
     if len(herr) > 0 || status != 200 { return }
     body = resp
     ok = 1

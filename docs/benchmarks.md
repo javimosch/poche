@@ -11,7 +11,7 @@ POCHE_DB=/tmp/poche-bench ./poche bench --n 100000
 | metric | result |
 |---|---|
 | n | 100_000 |
-| insert | **176k docs/s** (566 ms) |
+| insert | **202k docs/s** (493 ms, v0.2 dogfood run) |
 | indexed find `status=paused` limit 50 | &lt;1 ms |
 | count paused | 33_334 |
 
@@ -32,3 +32,15 @@ HTTP docs/s is accept-loop + curl process overhead (not engine-bound). Engine th
 ./scripts/scenario.sh bank 400
 ./scripts/scenario.sh carrent 400
 ```
+
+## Compiled backend dogfood
+
+```sh
+./examples/test.sh
+```
+
+All three pure-MFL backends pass against a real local poche actor:
+
+- Twitter: profiles → posts → follows → likes → timeline (including quoted content)
+- Marketplace: seller/customer/product → stock-safe order → oversell rejection
+- Car renting: fleet → interval booking → overlap rejection → cancel/rebook

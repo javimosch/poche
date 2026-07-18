@@ -10,6 +10,8 @@ func cr_fail(msg) {
     exit(80)
 }
 
+func cr_j(s) (out) { out = poche_json_escape(s) }
+
 func cr_client() (p) {
     url := env("POCHE_URL")
     if len(url) == 0 { url = "http://127.0.0.1:7700" }
@@ -37,17 +39,17 @@ func cr_bootstrap(p) {
 
 func cr_customer(p, a) {
     if len(a) < 2 { cr_fail("customer <email> <name>") }
-    id, ok := poche_create(p, "rental_customers", "{\"email\":\"" + a[0] + "\",\"name\":\"" + a[1] + "\"}")
+    id, ok := poche_create(p, "rental_customers", "{\"email\":\"" + cr_j(a[0]) + "\",\"name\":\"" + cr_j(a[1]) + "\"}")
     if ok == 0 { cr_fail("customer create failed") }
     cr_out("{\"id\":\"" + id + "\"}")
 }
 
 func cr_car(p, a) {
     if len(a) < 6 { cr_fail("car <plate> <model> <city> <seats> <daily_rate> <active>") }
-    doc := "{\"plate\":\"" + a[0] + "\",\"model\":\"" + a[1] + "\",\"city\":\"" + a[2] + "\",\"seats\":" + a[3] + ",\"daily_rate\":" + a[4] + ",\"active\":" + a[5] + "}"
+    doc := "{\"plate\":\"" + cr_j(a[0]) + "\",\"model\":\"" + cr_j(a[1]) + "\",\"city\":\"" + cr_j(a[2]) + "\",\"seats\":" + a[3] + ",\"daily_rate\":" + a[4] + ",\"active\":" + a[5] + "}"
     id, ok := poche_create(p, "cars", doc)
     if ok == 0 { cr_fail("car create failed") }
-    cr_out("{\"id\":\"" + id + "\",\"plate\":\"" + a[0] + "\"}")
+    cr_out("{\"id\":\"" + id + "\",\"plate\":\"" + cr_j(a[0]) + "\"}")
 }
 
 func cr_reserve(p, a) {
@@ -68,7 +70,7 @@ func cr_reserve(p, a) {
     if parse_int(cv) > 0 { cr_fail("car unavailable for interval") }
     days := end - start
     total := days * parse_int(ratev)
-    doc := "{\"customer_id\":\"" + a[0] + "\",\"car_id\":\"" + a[1] + "\",\"start_day\":" + str(start) + ",\"end_day\":" + str(end) + ",\"total_cents\":" + str(total) + ",\"status\":\"confirmed\"}"
+    doc := "{\"customer_id\":\"" + cr_j(a[0]) + "\",\"car_id\":\"" + cr_j(a[1]) + "\",\"start_day\":" + str(start) + ",\"end_day\":" + str(end) + ",\"total_cents\":" + str(total) + ",\"status\":\"confirmed\"}"
     id, ok := poche_create(p, "bookings", doc)
     if ok == 0 { cr_fail("booking create failed") }
     cr_out("{\"id\":\"" + id + "\",\"days\":" + str(days) + ",\"total_cents\":" + str(total) + "}")

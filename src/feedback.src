@@ -30,14 +30,14 @@ func cmd_feedback(args) {
     if len(args) < 1 { out_err(80, "input", "usage: poche feedback <message>", "") }
     msg := join(args, " ")
     id := to_hex(rand_bytes(16))
-    doc := "{\"id\":\"" + id + "\",\"kind\":\"feedback\",\"message\":\"" + jesc_p(msg) + "\",\"context\":\"cli\",\"reporter\":\"\",\"version\":\"0.1.0\",\"created\":" + str(now_ms()) + "}"
+    doc := "{\"id\":\"" + id + "\",\"kind\":\"feedback\",\"message\":\"" + jesc_p(msg) + "\",\"context\":\"cli\",\"reporter\":\"\",\"version\":\"" + poche_version() + "\",\"created\":" + str(now_ms()) + "}"
     st_put("_feedback", id, doc)
     // dual-write relay (never fail caller)
     relay := env("FEEDBACK_RELAY")
     if relay != "off" {
         url := "https://feedback.intrane.fr/v1/feedback"
         if len(relay) > 0 && relay != "on" { url = relay }
-        body := "{\"id\":\"" + id + "\",\"kind\":\"feedback\",\"message\":\"" + jesc_p(msg) + "\",\"tool\":\"poche\",\"version\":\"0.1.0\"}"
+        body := "{\"id\":\"" + id + "\",\"kind\":\"feedback\",\"message\":\"" + jesc_p(msg) + "\",\"tool\":\"poche\",\"version\":\"" + poche_version() + "\"}"
         status, resp, herr := http_request("POST", url, []string{"content-type: application/json"}, body)
         if len(herr) > 0 || status == 0 { eprint("{\"event\":\"relay_skip\",\"reason\":\"network\"}") }
     }

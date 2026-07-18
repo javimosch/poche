@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.0 — 2026-07-19
+
+### Added
+
+- Three compiled machin dogfood backends: Twitter, marketplace, car renting
+- Machine bootstrap API (`/admin/schema`, `/admin/index`, `/admin/expose`)
+- Schema modifiers: `!required`, `!unique`, `!now`, `!min=`, `!max=`, `!ref=`
+- Atomic increment and compare-and-swap mutations
+- Pagination offsets, total counts and numeric sorting
+- Escaped SDK JSON and URL path segments
+
+### Verified
+
+- 12 dogfood gaps fixed
+- Core smoke + all 3 backend smoke suites pass
+- 100k insert bench: 202k docs/s on maintainer workstation
+- Every `src/*.src` and example MFL source remains under 500 LOC
+
 ## 0.1.0 — 2026-07-19
 
 ### Added

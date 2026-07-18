@@ -11,12 +11,12 @@ func jesc_p(s) (out) {
 func eprint(s) { n := write(2, s + "\n") }
 
 func out_ok(dataJson) {
-    println("{\"ok\":true,\"version\":\"0.1.0\",\"data\":" + dataJson + "}")
+    println("{\"ok\":true,\"version\":\"" + poche_version() + "\",\"data\":" + dataJson + "}")
     exit(0)
 }
 
 func out_ok_keep(dataJson) {
-    println("{\"ok\":true,\"version\":\"0.1.0\",\"data\":" + dataJson + "}")
+    println("{\"ok\":true,\"version\":\"" + poche_version() + "\",\"data\":" + dataJson + "}")
 }
 
 func out_err(code, typ, msg, suggestion) {

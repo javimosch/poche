@@ -2,7 +2,7 @@
 
 <p align="center">
   <b>Agent-first headless CMS — one machin binary, grange underneath, no UI.</b><br>
-  Collections · schemas · RBAC · REST · realtime <code>/watch</code> · files.<br>
+  Constraints · RBAC · REST · atomic mutations · paging · realtime <code>/watch</code> · files.<br>
   Built for agents ([cli-specs](https://cli-specs.intrane.fr/)).
 </p>
 
@@ -42,9 +42,38 @@ POCHE_DB=/tmp/poche-bench ./poche bench --n 100000
 
 Typical on a laptop: ~180k docs/s bulk insert with 2 indexes; indexed find/count in &lt;1 ms.
 
+## Real machin backends
+
+`examples/` contains three compiled dogfood applications:
+
+- `twitter-social-media` — profiles, posts, follows, likes, timeline;
+- `amazon-marketplace` — catalog and stock-safe orders using CAS;
+- `car-renting` — interval availability, reservations and paged fleet queries.
+
+Run all three end-to-end:
+
+```sh
+./examples/test.sh
+```
+
+Building them found and fixed
+[12 concrete poche gaps](docs/dogfood-gaps.md): machine bootstrap, required and
+unique fields, server timestamps, bounds, references, atomic increment/CAS,
+pagination totals, sorting, and SDK escaping.
+
+## Schema modifiers
+
+```text
+title:string!required
+slug:string!unique
+created_at:int!now
+price_cents:int!min=0!max=1000000
+seller_id:string!ref=sellers
+```
+
 ## Agent contract
 
-- stdout = `{"ok":true,"version":"0.1.0","data":…}`
+- stdout = `{"ok":true,"version":"0.2.0","data":…}`
 - stderr = `{"ok":false,"error":{code,type,message,…}}`
 - exit: `0` · `80–89` input · `90–99` resource · `100–109` integration · `110–119` internal
 - `poche guide` · `poche help-json` · `poche feedback "…"` · `poche update`

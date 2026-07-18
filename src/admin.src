@@ -22,6 +22,11 @@ func h_admin_schema(req, tok) (res) {
         res = srv_err("400 Bad Request", "validation", "name and fields cannot be empty")
         return
     }
+    sem := schema_validate(fields)
+    if sem != "" {
+        res = srv_err("400 Bad Request", "validation", sem)
+        return
+    }
     old, found := schema_get(name)
     exposed := 0
     actions := ""

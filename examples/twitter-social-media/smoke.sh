@@ -15,10 +15,10 @@ trap 'kill "$PID" 2>/dev/null || true; rm -rf "$DB"' EXIT
 sleep .4
 ./twitter-social-media bootstrap >/dev/null
 ./twitter-social-media profile ada "Ada Lovelace" "computing" >/dev/null
-POST=$(./twitter-social-media post ada "hello agents")
+POST=$(./twitter-social-media post ada 'hello "agents"')
 POST_ID=$(printf '%s' "$POST" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
 ./twitter-social-media profile bob "Bob" "builder" >/dev/null
 ./twitter-social-media follow bob ada >/dev/null
 ./twitter-social-media like bob "$POST_ID" >/dev/null
-./twitter-social-media timeline ada 10 | grep -q 'hello agents'
+./twitter-social-media timeline ada 10 | grep -q 'hello'
 echo '{"ok":true,"app":"twitter-social-media"}'

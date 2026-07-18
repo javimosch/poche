@@ -10,6 +10,8 @@ func am_fail(msg) {
     exit(80)
 }
 
+func am_j(s) (out) { out = poche_json_escape(s) }
+
 func am_client() (p) {
     url := env("POCHE_URL")
     if len(url) == 0 { url = "http://127.0.0.1:7700" }
@@ -40,14 +42,14 @@ func am_bootstrap(p) {
 
 func am_seller(p, a) {
     if len(a) < 1 { am_fail("seller <name>") }
-    id, ok := poche_create(p, "sellers", "{\"name\":\"" + a[0] + "\"}")
+    id, ok := poche_create(p, "sellers", "{\"name\":\"" + am_j(a[0]) + "\"}")
     if ok == 0 { am_fail("seller create failed") }
     am_out("{\"id\":\"" + id + "\"}")
 }
 
 func am_customer(p, a) {
     if len(a) < 2 { am_fail("customer <email> <name>") }
-    doc := "{\"email\":\"" + a[0] + "\",\"name\":\"" + a[1] + "\"}"
+    doc := "{\"email\":\"" + am_j(a[0]) + "\",\"name\":\"" + am_j(a[1]) + "\"}"
     id, ok := poche_create(p, "customers", doc)
     if ok == 0 { am_fail("customer create failed") }
     am_out("{\"id\":\"" + id + "\"}")
@@ -55,10 +57,10 @@ func am_customer(p, a) {
 
 func am_product(p, a) {
     if len(a) < 6 { am_fail("product <seller_id> <sku> <title> <price_cents> <stock> <active>") }
-    doc := "{\"seller_id\":\"" + a[0] + "\",\"sku\":\"" + a[1] + "\",\"title\":\"" + a[2] + "\",\"price_cents\":" + a[3] + ",\"stock\":" + a[4] + ",\"active\":" + a[5] + "}"
+    doc := "{\"seller_id\":\"" + am_j(a[0]) + "\",\"sku\":\"" + am_j(a[1]) + "\",\"title\":\"" + am_j(a[2]) + "\",\"price_cents\":" + a[3] + ",\"stock\":" + a[4] + ",\"active\":" + a[5] + "}"
     id, ok := poche_create(p, "products", doc)
     if ok == 0 { am_fail("product create failed") }
-    am_out("{\"id\":\"" + id + "\",\"sku\":\"" + a[1] + "\"}")
+    am_out("{\"id\":\"" + id + "\",\"sku\":\"" + am_j(a[1]) + "\"}")
 }
 
 func am_order(p, a) {
@@ -79,7 +81,7 @@ func am_order(p, a) {
         am_fail("stock changed; retry order")
     }
     total := parse_int(pv) * qty
-    doc := "{\"customer_id\":\"" + a[0] + "\",\"product_id\":\"" + a[1] + "\",\"qty\":" + str(qty) + ",\"total_cents\":" + str(total) + ",\"status\":\"placed\"}"
+    doc := "{\"customer_id\":\"" + am_j(a[0]) + "\",\"product_id\":\"" + am_j(a[1]) + "\",\"qty\":" + str(qty) + ",\"total_cents\":" + str(total) + ",\"status\":\"placed\"}"
     id, ok := poche_create(p, "orders", doc)
     if ok == 0 {
         // Compensating increment keeps stock honest if order persistence fails.

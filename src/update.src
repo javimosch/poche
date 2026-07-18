@@ -1,6 +1,6 @@
 // poche update — cli-update-spec: content-hash verify-then-swap.
 
-func poche_version() (v) { v = "0.1.0" }
+func poche_version() (v) { v = "0.2.0" }
 
 func h_version() (res) {
     // Prefer hashing a published artifact when POCHE_DIST is set (hosted).

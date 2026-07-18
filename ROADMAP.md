@@ -1,5 +1,14 @@
 # ROADMAP
 
+## Done (v0.2.0 dogfood)
+
+- [x] Three real machin backends under `examples/`
+- [x] 12 dogfood-driven poche gaps fixed
+- [x] Constraints, references and server-side timestamps
+- [x] Atomic increment/CAS
+- [x] Offset/total pagination + numeric sort
+- [x] Safe machine bootstrap API + escaped MFL SDK
+
 ## Done (v0.1.0)
 
 - [x] Scaffold + VISION + four cli-specs surface
