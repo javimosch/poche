@@ -86,6 +86,19 @@ func srv_handle(req) (res) {
         }
     }
 
+    if req.method == "POST" && p == "/admin/schema" {
+        res = h_admin_schema(req, tok)
+        return
+    }
+    if req.method == "POST" && p == "/admin/index" {
+        res = h_admin_index(req, tok)
+        return
+    }
+    if req.method == "POST" && p == "/admin/expose" {
+        res = h_admin_expose(req, tok)
+        return
+    }
+
     if req.method == "GET" && (p == "/files" || has_prefix(p, "/files/")) {
         u, uf := user_by_token(tok)
         if uf == 0 && g_cloud_admin == 0 { res = srv_err("403 Forbidden", "auth", "token required")  return }

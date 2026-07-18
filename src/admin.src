@@ -1,0 +1,99 @@
+// poche admin HTTP — machine-driven project bootstrap for backend apps.
+// All routes require an admin bearer token (or cloud tenant token).
+
+func admin_allowed(tok) (yes) {
+    yes = allowed(tok, "_admin", "admin")
+}
+
+func h_admin_schema(req, tok) (res) {
+    if admin_allowed(tok) == 0 {
+        res = srv_err("403 Forbidden", "auth", "admin token required")
+        return
+    }
+    nv, ne := json_get(req.body, ".name")
+    fv, fe := json_get(req.body, ".fields")
+    if len(ne) > 0 || len(fe) > 0 {
+        res = srv_err("400 Bad Request", "validation", "body requires name and fields")
+        return
+    }
+    name := unq(nv)
+    fields := unq(fv)
+    if len(name) == 0 || len(fields) == 0 {
+        res = srv_err("400 Bad Request", "validation", "name and fields cannot be empty")
+        return
+    }
+    old, found := schema_get(name)
+    exposed := 0
+    actions := ""
+    if found == 1 {
+        ev, _ := json_get(old, ".exposed")
+        av, _ := json_get(old, ".actions")
+        exposed = parse_int(unq(ev))
+        actions = unq(av)
+    }
+    if schema_put(name, fields, exposed, actions) == 0 {
+        res = srv_err("500 Internal Server Error", "internal", "schema persist failed")
+        return
+    }
+    if st_use(name) == 0 {
+        res = srv_err("500 Internal Server Error", "internal", "collection open failed")
+        return
+    }
+    res = srv_ok("{\"collection\":\"" + jesc_p(name) + "\",\"fields\":\"" + jesc_p(fields) + "\"}")
+}
+
+func h_admin_index(req, tok) (res) {
+    if admin_allowed(tok) == 0 {
+        res = srv_err("403 Forbidden", "auth", "admin token required")
+        return
+    }
+    cv, ce := json_get(req.body, ".collection")
+    fv, fe := json_get(req.body, ".field")
+    if len(ce) > 0 || len(fe) > 0 {
+        res = srv_err("400 Bad Request", "validation", "body requires collection and field")
+        return
+    }
+    coll := unq(cv)
+    field := unq(fv)
+    schema, found := schema_get(coll)
+    if found == 0 {
+        res = srv_err("404 Not Found", "not_found", "no schema for " + coll)
+        return
+    }
+    specv, _ := json_get(schema, ".fields")
+    if field_type(unq(specv), field) == "" {
+        res = srv_err("400 Bad Request", "validation", "field not in schema: " + field)
+        return
+    }
+    if st_index(coll, field) == 0 {
+        res = srv_err("500 Internal Server Error", "internal", "index failed")
+        return
+    }
+    res = srv_ok("{\"collection\":\"" + jesc_p(coll) + "\",\"field\":\"" + jesc_p(field) + "\",\"indexed\":true}")
+}
+
+func h_admin_expose(req, tok) (res) {
+    if admin_allowed(tok) == 0 {
+        res = srv_err("403 Forbidden", "auth", "admin token required")
+        return
+    }
+    cv, ce := json_get(req.body, ".collection")
+    av, ae := json_get(req.body, ".actions")
+    if len(ce) > 0 || len(ae) > 0 {
+        res = srv_err("400 Bad Request", "validation", "body requires collection and actions")
+        return
+    }
+    coll := unq(cv)
+    actions := unq(av)
+    schema, found := schema_get(coll)
+    if found == 0 {
+        res = srv_err("404 Not Found", "not_found", "no schema for " + coll)
+        return
+    }
+    fv, _ := json_get(schema, ".fields")
+    if schema_put(coll, unq(fv), 1, actions) == 0 {
+        res = srv_err("500 Internal Server Error", "internal", "expose persist failed")
+        return
+    }
+    res = srv_ok("{\"collection\":\"" + jesc_p(coll) + "\",\"exposed\":true,\"actions\":\"" + jesc_p(actions) + "\"}")
+}

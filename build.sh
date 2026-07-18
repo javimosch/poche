@@ -29,6 +29,7 @@ SRCS=(
   src/schema.src
   src/data.src
   src/auth.src
+  src/admin.src
   src/cloud.src
   src/files.src
   src/guide.src

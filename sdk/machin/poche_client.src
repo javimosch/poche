@@ -30,6 +30,27 @@ func poche_data(status, resp) (data) {
     if len(err) == 0 { data = v }
 }
 
+func poche_schema(p, name, fields) (ok) {
+    ok = 0
+    body := "{\"name\":\"" + name + "\",\"fields\":\"" + fields + "\"}"
+    status, resp := poche_req(p, "POST", "/admin/schema", body)
+    if status == 200 { ok = 1 }
+}
+
+func poche_index(p, coll, field) (ok) {
+    ok = 0
+    body := "{\"collection\":\"" + coll + "\",\"field\":\"" + field + "\"}"
+    status, resp := poche_req(p, "POST", "/admin/index", body)
+    if status == 200 { ok = 1 }
+}
+
+func poche_expose(p, coll, actions) (ok) {
+    ok = 0
+    body := "{\"collection\":\"" + coll + "\",\"actions\":\"" + actions + "\"}"
+    status, resp := poche_req(p, "POST", "/admin/expose", body)
+    if status == 200 { ok = 1 }
+}
+
 func poche_list(p, coll, where, limit) (data) {
     qs := "/api/" + coll + "?limit=" + str(limit)
     if len(where) > 0 { qs = qs + "&where=" + url_encode(where) }
