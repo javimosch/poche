@@ -57,9 +57,9 @@ Run all three end-to-end:
 ```
 
 Building them found and fixed
-[12 concrete poche gaps](docs/dogfood-gaps.md): machine bootstrap, required and
+[13 concrete poche gaps](docs/dogfood-gaps.md): machine bootstrap, required and
 unique fields, server timestamps, bounds, references, atomic increment/CAS,
-pagination totals, sorting, and SDK escaping.
+pagination totals, bounded sorting, and SDK escaping.
 
 ## Schema modifiers
 

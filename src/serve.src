@@ -161,9 +161,26 @@ func srv_handle(req) (res) {
     if req.method == "GET" && len(id) == 0 {
         if exposed_ok(coll, "read") == 0 { res = srv_err("403 Forbidden", "forbidden", "not exposed")  return }
         if allowed(tok, coll, "read") == 0 { res = srv_err("403 Forbidden", "auth", "token lacks read")  return }
+        limit := parse_int(query(req, "limit"))
+        if limit < 1 { limit = 50 }
+        if limit > 1000 { limit = 1000 }
+        offset := parse_int(query(req, "offset"))
+        if offset < 0 { offset = 0 }
+        if offset > 1000000 { res = srv_err("400 Bad Request", "validation", "offset exceeds 1000000")  return }
+        sort_field := query(req, "sort")
+        if len(sort_field) > 0 {
+            schema, found := schema_get(coll)
+            if found == 0 { res = srv_err("404 Not Found", "not_found", "no schema")  return }
+            sfv, _ := json_get(schema, ".fields")
+            sort_type := field_type(unq(sfv), sort_field)
+            if sort_type != "int" && sort_type != "float" {
+                res = srv_err("400 Bad Request", "validation", "sort field must be int or float")
+                return
+            }
+        }
         desc := 0
         if query(req, "order") == "desc" { desc = 1 }
-        res = srv_ok(st_page(coll, query(req, "where"), parse_int(query(req, "limit")), parse_int(query(req, "offset")), query(req, "sort"), desc))
+        res = srv_ok(st_page(coll, query(req, "where"), limit, offset, sort_field, desc))
         return
     }
     if req.method == "GET" && len(id) > 0 {

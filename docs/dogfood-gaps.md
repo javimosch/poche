@@ -17,8 +17,9 @@ friction into a tested poche improvement.
 | 10 | Fleet/catalog pages could not request the next page or know total matches | `offset` pagination with stable `count` + `total` metadata | fixed |
 | 11 | Timelines, prices and fleet results could not be ordered | Numeric `sort` + ascending/descending query support | fixed |
 | 12 | Quotes/newlines in real titles, bios and names broke SDK-built JSON | SDK JSON escaping + URL-encoded path segments | fixed |
+| 13 | Public list routes could accidentally return/sort unbounded datasets | Default 50, max 1000, offset cap, numeric-sort validation | fixed |
 
-The goal threshold is met: **12 concrete gaps fixed and exercised by the three
+The goal threshold is met: **13 concrete gaps fixed and exercised by the three
 compiled machin backends**.
 
 Target: at least 10 verified fixes before this dogfood goal is complete.

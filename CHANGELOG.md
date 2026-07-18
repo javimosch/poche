@@ -13,7 +13,7 @@
 
 ### Verified
 
-- 12 dogfood gaps fixed
+- 13 dogfood gaps fixed
 - Core smoke + all 3 backend smoke suites pass
 - 100k insert bench: 202k docs/s on maintainer workstation
 - Every `src/*.src` and example MFL source remains under 500 LOC
