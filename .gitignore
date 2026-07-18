@@ -7,3 +7,7 @@ poche.bak
 /tmp/
 framework
 vendor
+examples/**/*.mfl
+examples/twitter-social-media/twitter-social-media
+examples/amazon-marketplace/amazon-marketplace
+examples/car-renting/car-renting
