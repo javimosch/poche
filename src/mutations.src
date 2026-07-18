@@ -1,0 +1,131 @@
+// poche atomic mutations — safe read/modify/write inside the single actor.
+
+func mutation_rebuild(fieldspec, current, field, replacement) (doc, errmsg) {
+    doc = ""
+    errmsg = ""
+    kvs := []string{}
+    specs := split(fieldspec, ",")
+    i := 0
+    while i < len(specs) {
+        p := specs[i]
+        c := index(p, ":")
+        if c > 0 {
+            name := substr(p, 0, c)
+            tok := ""
+            terr := ""
+            if name == field {
+                tok = replacement
+            } else {
+                tok, terr = json_get(current, "." + name)
+                if len(terr) > 0 { i = i + 1  continue }
+            }
+            value := tok
+            if len(tok) >= 2 && substr(tok, 0, 1) == "\"" { value = unq(tok) }
+            kvs = append(kvs, name + "=" + value)
+        }
+        i = i + 1
+    }
+    doc, errmsg = build_doc(fieldspec, kvs)
+}
+
+func mutation_prepare(req, tok, coll, id) (schema, current, ok, res) {
+    schema = ""
+    current = ""
+    ok = 0
+    res = srv_err("500 Internal Server Error", "internal", "mutation failed")
+    if exposed_ok(coll, "update") == 0 {
+        res = srv_err("403 Forbidden", "forbidden", "not exposed for update")
+        return
+    }
+    if allowed(tok, coll, "update") == 0 {
+        res = srv_err("403 Forbidden", "auth", "token lacks update")
+        return
+    }
+    schema, found := schema_get(coll)
+    if found == 0 {
+        res = srv_err("404 Not Found", "not_found", "no schema")
+        return
+    }
+    current, found = st_get(coll, id)
+    if found == 0 {
+        res = srv_err("404 Not Found", "not_found", "missing doc")
+        return
+    }
+    ok = 1
+}
+
+func mutation_save(coll, id, fieldspec, doc) (res) {
+    uem := validate_unique(coll, fieldspec, doc, id)
+    if uem != "" { res = srv_err("409 Conflict", "exists", uem)  return }
+    cem := validate_constraints(fieldspec, doc)
+    if cem != "" { res = srv_err("400 Bad Request", "validation", cem)  return }
+    if st_put(coll, id, doc) == 0 {
+        res = srv_err("500 Internal Server Error", "internal", "write failed")
+        return
+    }
+    res = srv_ok("{\"_id\":\"" + jesc_p(id) + "\",\"doc\":" + doc + "}")
+}
+
+func h_increment(req, tok, coll, id) (res) {
+    schema, current, ok, prep := mutation_prepare(req, tok, coll, id)
+    if ok == 0 { res = prep  return }
+    fv, _ := json_get(req.body, ".field")
+    dv, de := json_get(req.body, ".delta")
+    if len(fv) == 0 || len(de) > 0 {
+        res = srv_err("400 Bad Request", "validation", "body requires field and numeric delta")
+        return
+    }
+    field := unq(fv)
+    specv, _ := json_get(schema, ".fields")
+    fieldspec := unq(specv)
+    typ := field_type(fieldspec, field)
+    if typ != "int" && typ != "float" {
+        res = srv_err("400 Bad Request", "validation", "increment field must be int or float")
+        return
+    }
+    oldv, oe := json_get(current, "." + field)
+    if len(oe) > 0 {
+        res = srv_err("400 Bad Request", "validation", "field missing in document")
+        return
+    }
+    next := ""
+    if typ == "int" {
+        next = str(parse_int(oldv) + parse_int(dv))
+    } else {
+        next = str(parse_float(oldv) + parse_float(dv))
+    }
+    doc, em := mutation_rebuild(fieldspec, current, field, next)
+    if em != "" { res = srv_err("400 Bad Request", "validation", em)  return }
+    res = mutation_save(coll, id, fieldspec, doc)
+}
+
+func h_compare_swap(req, tok, coll, id) (res) {
+    schema, current, ok, prep := mutation_prepare(req, tok, coll, id)
+    if ok == 0 { res = prep  return }
+    fv, _ := json_get(req.body, ".field")
+    expect, ee := json_get(req.body, ".expect")
+    value, ve := json_get(req.body, ".value")
+    if len(fv) == 0 || len(ee) > 0 || len(ve) > 0 {
+        res = srv_err("400 Bad Request", "validation", "body requires field, expect and value")
+        return
+    }
+    field := unq(fv)
+    actual, ae := json_get(current, "." + field)
+    if len(ae) > 0 {
+        res = srv_err("400 Bad Request", "validation", "field missing in document")
+        return
+    }
+    if actual != expect {
+        res = response("409 Conflict", "application/json", "{\"ok\":false,\"error\":{\"type\":\"compare_failed\",\"message\":\"value changed\",\"actual\":" + actual + "}}")
+        return
+    }
+    specv, _ := json_get(schema, ".fields")
+    fieldspec := unq(specv)
+    if field_type(fieldspec, field) == "" {
+        res = srv_err("400 Bad Request", "validation", "field not in schema")
+        return
+    }
+    doc, em := mutation_rebuild(fieldspec, current, field, value)
+    if em != "" { res = srv_err("400 Bad Request", "validation", em)  return }
+    res = mutation_save(coll, id, fieldspec, doc)
+}

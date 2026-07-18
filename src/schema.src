@@ -81,6 +81,34 @@ func field_auto_now(fieldspec, name) (yes) {
     }
 }
 
+func field_modifier(fieldspec, name, prefix) (value, found) {
+    value = ""
+    found = 0
+    parts := split(fieldspec, ",")
+    i := 0
+    while i < len(parts) {
+        p := parts[i]
+        c := index(p, ":")
+        if c > 0 && substr(p, 0, c) == name {
+            raw := substr(p, c + 1, len(p))
+            bang := index(raw, "!")
+            if bang < 0 { return }
+            mods := split(substr(raw, bang + 1, len(raw)), "!")
+            mi := 0
+            while mi < len(mods) {
+                if has_prefix(mods[mi], prefix) {
+                    value = substr(mods[mi], len(prefix), len(mods[mi]))
+                    found = 1
+                    return
+                }
+                mi = mi + 1
+            }
+            return
+        }
+        i = i + 1
+    }
+}
+
 func schema_validate(fieldspec) (errmsg) {
     errmsg = ""
     if len(fieldspec) == 0 { errmsg = "schema needs at least one field"  return }
@@ -121,12 +149,25 @@ func schema_validate(fieldspec) (errmsg) {
             mi := 0
             while mi < len(ms) {
                 mod := ms[mi]
-                if mod != "" && mod != "required" && mod != "unique" && mod != "now" {
+                known_value := has_prefix(mod, "min=") || has_prefix(mod, "max=") || has_prefix(mod, "ref=")
+                if mod != "" && mod != "required" && mod != "unique" && mod != "now" && known_value == false {
                     errmsg = "unsupported modifier for " + name + ": " + mod
                     return
                 }
                 if mod == "now" && typ != "int" {
                     errmsg = "!now requires int field: " + name
+                    return
+                }
+                if (has_prefix(mod, "min=") || has_prefix(mod, "max=")) && typ != "int" && typ != "float" {
+                    errmsg = "numeric bound requires int/float field: " + name
+                    return
+                }
+                if has_prefix(mod, "ref=") && typ != "string" {
+                    errmsg = "!ref requires string id field: " + name
+                    return
+                }
+                if has_prefix(mod, "ref=") && len(substr(mod, 4, len(mod))) == 0 {
+                    errmsg = "empty ref collection: " + name
                     return
                 }
                 mi = mi + 1

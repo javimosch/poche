@@ -88,6 +88,19 @@ func poche_update(p, coll, id, doc) (ok) {
     if status == 200 { ok = 1 }
 }
 
+func poche_increment(p, coll, id, field, delta) (data) {
+    body := "{\"field\":\"" + field + "\",\"delta\":" + str(delta) + "}"
+    status, resp := poche_req(p, "POST", "/api/" + coll + "/" + id + "/increment", body)
+    data = poche_data(status, resp)
+}
+
+func poche_compare_swap(p, coll, id, field, expect_json, value_json) (ok) {
+    ok = 0
+    body := "{\"field\":\"" + field + "\",\"expect\":" + expect_json + ",\"value\":" + value_json + "}"
+    status, resp := poche_req(p, "POST", "/api/" + coll + "/" + id + "/compare-swap", body)
+    if status == 200 { ok = 1 }
+}
+
 func poche_delete(p, coll, id) (ok) {
     ok = 0
     status, resp := poche_req(p, "DELETE", "/api/" + coll + "/" + id, "")

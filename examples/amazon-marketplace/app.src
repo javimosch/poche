@@ -1,0 +1,119 @@
+// amazon-marketplace — seller/catalog/order backend using poche.
+// Commands: bootstrap | seller | product | customer | order | catalog
+
+func am_out(data) {
+    println("{\"ok\":true,\"app\":\"amazon-marketplace\",\"data\":" + data + "}")
+}
+
+func am_fail(msg) {
+    write(2, "{\"ok\":false,\"error\":{\"type\":\"domain\",\"message\":\"" + msg + "\"}}\n")
+    exit(80)
+}
+
+func am_client() (p) {
+    url := env("POCHE_URL")
+    if len(url) == 0 { url = "http://127.0.0.1:7700" }
+    token := env("POCHE_TOKEN")
+    if len(token) == 0 { am_fail("POCHE_TOKEN required") }
+    p = poche_client(url, token)
+}
+
+func am_bootstrap(p) {
+    ok := poche_schema(p, "sellers", "name:string!,created_at:int!now")
+    if ok == 0 { am_fail("sellers schema failed") }
+    ok = poche_schema(p, "customers", "email:string!required!unique,name:string!,created_at:int!now")
+    if ok == 0 { am_fail("customers schema failed") }
+    ok = poche_schema(p, "products", "seller_id:string!ref=sellers,sku:string!required!unique,title:string!,price_cents:int!min=0,stock:int!min=0,active:bool!,created_at:int!now")
+    if ok == 0 { am_fail("products schema failed") }
+    ok = poche_schema(p, "orders", "customer_id:string!ref=customers,product_id:string!ref=products,qty:int!min=1,total_cents:int!min=0,status:string!,created_at:int!now")
+    if ok == 0 { am_fail("orders schema failed") }
+    poche_index(p, "customers", "email")
+    poche_index(p, "products", "sku")
+    poche_index(p, "products", "active")
+    poche_index(p, "orders", "customer_id")
+    poche_expose(p, "sellers", "read,create")
+    poche_expose(p, "customers", "read,create,update")
+    poche_expose(p, "products", "read,create,update")
+    poche_expose(p, "orders", "read,create,update")
+    am_out("{\"bootstrapped\":true,\"collections\":4}")
+}
+
+func am_seller(p, a) {
+    if len(a) < 1 { am_fail("seller <name>") }
+    id, ok := poche_create(p, "sellers", "{\"name\":\"" + a[0] + "\"}")
+    if ok == 0 { am_fail("seller create failed") }
+    am_out("{\"id\":\"" + id + "\"}")
+}
+
+func am_customer(p, a) {
+    if len(a) < 2 { am_fail("customer <email> <name>") }
+    doc := "{\"email\":\"" + a[0] + "\",\"name\":\"" + a[1] + "\"}"
+    id, ok := poche_create(p, "customers", doc)
+    if ok == 0 { am_fail("customer create failed") }
+    am_out("{\"id\":\"" + id + "\"}")
+}
+
+func am_product(p, a) {
+    if len(a) < 6 { am_fail("product <seller_id> <sku> <title> <price_cents> <stock> <active>") }
+    doc := "{\"seller_id\":\"" + a[0] + "\",\"sku\":\"" + a[1] + "\",\"title\":\"" + a[2] + "\",\"price_cents\":" + a[3] + ",\"stock\":" + a[4] + ",\"active\":" + a[5] + "}"
+    id, ok := poche_create(p, "products", doc)
+    if ok == 0 { am_fail("product create failed") }
+    am_out("{\"id\":\"" + id + "\",\"sku\":\"" + a[1] + "\"}")
+}
+
+func am_order(p, a) {
+    if len(a) < 3 { am_fail("order <customer_id> <product_id> <qty>") }
+    product, found := poche_get(p, "products", a[1])
+    if found == 0 { am_fail("product missing") }
+    sv, se := json_get(product, ".stock")
+    pv, pe := json_get(product, ".price_cents")
+    av, ae := json_get(product, ".active")
+    if len(se) > 0 || len(pe) > 0 || len(ae) > 0 { am_fail("invalid product") }
+    if av != "true" { am_fail("product inactive") }
+    stock := parse_int(sv)
+    qty := parse_int(a[2])
+    if qty < 1 || qty > stock { am_fail("insufficient stock") }
+    next := stock - qty
+    // CAS is the oversell guard: one order wins if two buyers race.
+    if poche_compare_swap(p, "products", a[1], "stock", str(stock), str(next)) == 0 {
+        am_fail("stock changed; retry order")
+    }
+    total := parse_int(pv) * qty
+    doc := "{\"customer_id\":\"" + a[0] + "\",\"product_id\":\"" + a[1] + "\",\"qty\":" + str(qty) + ",\"total_cents\":" + str(total) + ",\"status\":\"placed\"}"
+    id, ok := poche_create(p, "orders", doc)
+    if ok == 0 {
+        // Compensating increment keeps stock honest if order persistence fails.
+        poche_increment(p, "products", a[1], "stock", qty)
+        am_fail("order create failed; stock restored")
+    }
+    am_out("{\"id\":\"" + id + "\",\"total_cents\":" + str(total) + "}")
+}
+
+func am_catalog(p, a) {
+    limit := 20
+    if len(a) > 0 { limit = parse_int(a[0]) }
+    data := poche_list(p, "products", "active=true", limit)
+    if len(data) == 0 { am_fail("catalog failed") }
+    am_out(data)
+}
+
+func am_shift(xs, n) (out) {
+    out = []string{}
+    i := n
+    while i < len(xs) { out = append(out, xs[i])  i = i + 1 }
+}
+
+func main() {
+    av := args()
+    if len(av) < 2 { am_fail("command required") }
+    cmd := av[1]
+    a := am_shift(av, 2)
+    p := am_client()
+    if cmd == "bootstrap" { am_bootstrap(p)  return }
+    if cmd == "seller" { am_seller(p, a)  return }
+    if cmd == "customer" { am_customer(p, a)  return }
+    if cmd == "product" { am_product(p, a)  return }
+    if cmd == "order" { am_order(p, a)  return }
+    if cmd == "catalog" { am_catalog(p, a)  return }
+    am_fail("unknown command")
+}

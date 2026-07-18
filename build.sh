@@ -32,6 +32,7 @@ SRCS=(
   src/admin.src
   src/cloud.src
   src/files.src
+  src/mutations.src
   src/guide.src
   src/feedback.src
   src/update.src

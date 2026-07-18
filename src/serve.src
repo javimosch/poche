@@ -144,6 +144,20 @@ func srv_handle(req) (res) {
     id := path_id(p)
     if len(coll) == 0 { return }
 
+    action_cut := index(id, "/")
+    if req.method == "POST" && action_cut > 0 {
+        object_id := substr(id, 0, action_cut)
+        action := substr(id, action_cut + 1, len(id))
+        if action == "increment" {
+            res = h_increment(req, tok, coll, object_id)
+            return
+        }
+        if action == "compare-swap" {
+            res = h_compare_swap(req, tok, coll, object_id)
+            return
+        }
+    }
+
     if req.method == "GET" && len(id) == 0 {
         if exposed_ok(coll, "read") == 0 { res = srv_err("403 Forbidden", "forbidden", "not exposed")  return }
         if allowed(tok, coll, "read") == 0 { res = srv_err("403 Forbidden", "auth", "token lacks read")  return }
@@ -168,6 +182,8 @@ func srv_handle(req) (res) {
         if em != "" { res = srv_err("400 Bad Request", "validation", em)  return }
         uem := validate_unique(coll, unq(fv), doc, "")
         if uem != "" { res = srv_err("409 Conflict", "exists", uem)  return }
+        cem := validate_constraints(unq(fv), doc)
+        if cem != "" { res = srv_err("400 Bad Request", "validation", cem)  return }
         nid := to_hex(rand_bytes(8))
         if st_put(coll, nid, doc) == 0 { res = srv_err("500 Internal Server Error", "internal", "write failed")  return }
         res = srv_ok("{\"_id\":\"" + nid + "\",\"doc\":" + doc + "}")
@@ -208,6 +224,8 @@ func srv_handle(req) (res) {
         if em != "" { res = srv_err("400 Bad Request", "validation", em)  return }
         uem := validate_unique(coll, fieldspec, doc, id)
         if uem != "" { res = srv_err("409 Conflict", "exists", uem)  return }
+        cem := validate_constraints(fieldspec, doc)
+        if cem != "" { res = srv_err("400 Bad Request", "validation", cem)  return }
         if st_put(coll, id, doc) == 0 { res = srv_err("500 Internal Server Error", "internal", "write failed")  return }
         res = srv_ok("{\"_id\":\"" + id + "\",\"doc\":" + doc + "}")
         return

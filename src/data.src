@@ -163,6 +163,46 @@ func validate_unique(coll, fieldspec, doc, self_id) (errmsg) {
     }
 }
 
+func validate_constraints(fieldspec, doc) (errmsg) {
+    errmsg = ""
+    parts := split(fieldspec, ",")
+    i := 0
+    while i < len(parts) {
+        p := parts[i]
+        c := index(p, ":")
+        if c > 0 {
+            name := substr(p, 0, c)
+            typ := field_type(fieldspec, name)
+            tok, terr := json_get(doc, "." + name)
+            if len(terr) == 0 {
+                if typ == "int" || typ == "float" {
+                    n := parse_float(tok)
+                    minv, hasmin := field_modifier(fieldspec, name, "min=")
+                    if hasmin == 1 && n < parse_float(minv) {
+                        errmsg = "field " + name + " below min " + minv
+                        return
+                    }
+                    maxv, hasmax := field_modifier(fieldspec, name, "max=")
+                    if hasmax == 1 && n > parse_float(maxv) {
+                        errmsg = "field " + name + " above max " + maxv
+                        return
+                    }
+                }
+                refcoll, hasref := field_modifier(fieldspec, name, "ref=")
+                if hasref == 1 {
+                    refid := unq(tok)
+                    old, found := st_get(refcoll, refid)
+                    if found == 0 {
+                        errmsg = "field " + name + " references missing " + refcoll + "/" + refid
+                        return
+                    }
+                }
+            }
+        }
+        i = i + 1
+    }
+}
+
 func data_create(args) {
     if len(args) < 2 { out_err(80, "input", "usage: data create <collection> <field=value> ...", "") }
     coll := args[0]
@@ -176,6 +216,8 @@ func data_create(args) {
     if em != "" { out_err(81, "validation", em, "") }
     uem := validate_unique(coll, unq(fv), doc, "")
     if uem != "" { out_err(91, "exists", uem, "") }
+    cem := validate_constraints(unq(fv), doc)
+    if cem != "" { out_err(81, "validation", cem, "") }
     id := to_hex(rand_bytes(8))
     if st_put(coll, id, doc) == 0 { out_err(110, "internal", "write failed", "") }
     out_ok("{\"collection\":\"" + jesc_p(coll) + "\",\"_id\":\"" + id + "\",\"doc\":" + doc + "}")
@@ -261,6 +303,8 @@ func data_update(args) {
     if em != "" { out_err(81, "validation", em, "") }
     uem := validate_unique(coll, fieldspec, doc, id)
     if uem != "" { out_err(91, "exists", uem, "") }
+    cem := validate_constraints(fieldspec, doc)
+    if cem != "" { out_err(81, "validation", cem, "") }
     if st_put(coll, id, doc) == 0 { out_err(110, "internal", "write failed", "") }
     out_ok("{\"collection\":\"" + jesc_p(coll) + "\",\"_id\":\"" + id + "\",\"doc\":" + doc + "}")
 }
