@@ -24,7 +24,8 @@ func field_type(fieldspec, name) (t) {
         if c > 0 {
             if substr(p, 0, c) == name {
                 t = substr(p, c + 1, len(p))
-                if has_suffix(t, "!") { t = substr(t, 0, len(t) - 1) }
+                bang := index(t, "!")
+                if bang >= 0 { t = substr(t, 0, bang) }
                 return
             }
         }
@@ -41,7 +42,39 @@ func field_required(fieldspec, name) (yes) {
         c := index(p, ":")
         if c > 0 && substr(p, 0, c) == name {
             raw := substr(p, c + 1, len(p))
-            if has_suffix(raw, "!") { yes = 1 }
+            if has_suffix(raw, "!") || contains(raw, "!required") { yes = 1 }
+            return
+        }
+        i = i + 1
+    }
+}
+
+func field_unique(fieldspec, name) (yes) {
+    yes = 0
+    parts := split(fieldspec, ",")
+    i := 0
+    while i < len(parts) {
+        p := parts[i]
+        c := index(p, ":")
+        if c > 0 && substr(p, 0, c) == name {
+            raw := substr(p, c + 1, len(p))
+            if contains(raw, "!unique") { yes = 1 }
+            return
+        }
+        i = i + 1
+    }
+}
+
+func field_auto_now(fieldspec, name) (yes) {
+    yes = 0
+    parts := split(fieldspec, ",")
+    i := 0
+    while i < len(parts) {
+        p := parts[i]
+        c := index(p, ":")
+        if c > 0 && substr(p, 0, c) == name {
+            raw := substr(p, c + 1, len(p))
+            if contains(raw, "!now") { yes = 1 }
             return
         }
         i = i + 1
@@ -71,11 +104,33 @@ func schema_validate(fieldspec) (errmsg) {
             return
         }
         seen[name] = 1
-        typ := substr(p, c + 1, len(p))
-        if has_suffix(typ, "!") { typ = substr(typ, 0, len(typ) - 1) }
+        raw := substr(p, c + 1, len(p))
+        typ := raw
+        bang := index(raw, "!")
+        mods := ""
+        if bang >= 0 {
+            typ = substr(raw, 0, bang)
+            mods = substr(raw, bang + 1, len(raw))
+        }
         if typ != "string" && typ != "int" && typ != "float" && typ != "bool" {
             errmsg = "unsupported type for " + name + ": " + typ
             return
+        }
+        if len(mods) > 0 {
+            ms := split(mods, "!")
+            mi := 0
+            while mi < len(ms) {
+                mod := ms[mi]
+                if mod != "" && mod != "required" && mod != "unique" && mod != "now" {
+                    errmsg = "unsupported modifier for " + name + ": " + mod
+                    return
+                }
+                if mod == "now" && typ != "int" {
+                    errmsg = "!now requires int field: " + name
+                    return
+                }
+                mi = mi + 1
+            }
         }
         i = i + 1
     }

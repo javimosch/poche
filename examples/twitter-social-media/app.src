@@ -1,0 +1,105 @@
+// twitter-social-media — a real domain backend driven by poche.
+// Commands: bootstrap | profile | post | follow | like | timeline
+
+func tw_out(data) {
+    println("{\"ok\":true,\"app\":\"twitter-social-media\",\"data\":" + data + "}")
+}
+
+func tw_fail(msg) {
+    write(2, "{\"ok\":false,\"error\":{\"type\":\"domain\",\"message\":\"" + msg + "\"}}\n")
+    exit(80)
+}
+
+func tw_client() (p) {
+    url := env("POCHE_URL")
+    if len(url) == 0 { url = "http://127.0.0.1:7700" }
+    token := env("POCHE_TOKEN")
+    if len(token) == 0 { tw_fail("POCHE_TOKEN required") }
+    p = poche_client(url, token)
+}
+
+func tw_bootstrap(p) {
+    ok := poche_schema(p, "profiles", "username:string!required!unique,display_name:string!,bio:string,created_at:int!now")
+    if ok == 0 { tw_fail("profiles schema failed") }
+    ok = poche_schema(p, "posts", "author:string!,body:string!,created_at:int!now,likes:int!")
+    if ok == 0 { tw_fail("posts schema failed") }
+    ok = poche_schema(p, "follows", "follower:string!,following:string!,created_at:int!now")
+    if ok == 0 { tw_fail("follows schema failed") }
+    ok = poche_schema(p, "likes", "username:string!,post_id:string!,created_at:int!now")
+    if ok == 0 { tw_fail("likes schema failed") }
+    poche_index(p, "profiles", "username")
+    poche_index(p, "posts", "author")
+    poche_index(p, "follows", "follower")
+    poche_index(p, "likes", "post_id")
+    poche_expose(p, "profiles", "read,create,update")
+    poche_expose(p, "posts", "read,create,update,delete")
+    poche_expose(p, "follows", "read,create,delete")
+    poche_expose(p, "likes", "read,create,delete")
+    tw_out("{\"bootstrapped\":true,\"collections\":4}")
+}
+
+func tw_profile(p, a) {
+    if len(a) < 2 { tw_fail("profile <username> <display_name> [bio]") }
+    bio := ""
+    if len(a) > 2 { bio = a[2] }
+    doc := "{\"username\":\"" + a[0] + "\",\"display_name\":\"" + a[1] + "\",\"bio\":\"" + bio + "\"}"
+    id, ok := poche_create(p, "profiles", doc)
+    if ok == 0 { tw_fail("profile create failed") }
+    tw_out("{\"id\":\"" + id + "\",\"username\":\"" + a[0] + "\"}")
+}
+
+func tw_post(p, a) {
+    if len(a) < 2 { tw_fail("post <author> <body>") }
+    doc := "{\"author\":\"" + a[0] + "\",\"body\":\"" + a[1] + "\",\"likes\":0}"
+    id, ok := poche_create(p, "posts", doc)
+    if ok == 0 { tw_fail("post create failed") }
+    tw_out("{\"id\":\"" + id + "\",\"author\":\"" + a[0] + "\"}")
+}
+
+func tw_follow(p, a) {
+    if len(a) < 2 { tw_fail("follow <follower> <following>") }
+    doc := "{\"follower\":\"" + a[0] + "\",\"following\":\"" + a[1] + "\"}"
+    id, ok := poche_create(p, "follows", doc)
+    if ok == 0 { tw_fail("follow failed") }
+    tw_out("{\"id\":\"" + id + "\"}")
+}
+
+func tw_like(p, a) {
+    if len(a) < 2 { tw_fail("like <username> <post_id>") }
+    doc := "{\"username\":\"" + a[0] + "\",\"post_id\":\"" + a[1] + "\"}"
+    id, ok := poche_create(p, "likes", doc)
+    if ok == 0 { tw_fail("like failed") }
+    tw_out("{\"id\":\"" + id + "\"}")
+}
+
+func tw_timeline(p, a) {
+    if len(a) < 1 { tw_fail("timeline <username> [limit]") }
+    limit := 20
+    if len(a) > 1 { limit = parse_int(a[1]) }
+    // Dogfood finding: this is only the user's own posts because poche v0.1
+    // has no sort/cursor/OR query yet.
+    data := poche_list(p, "posts", "author=" + a[0], limit)
+    if len(data) == 0 { tw_fail("timeline query failed") }
+    tw_out(data)
+}
+
+func tw_shift(xs, n) (out) {
+    out = []string{}
+    i := n
+    while i < len(xs) { out = append(out, xs[i])  i = i + 1 }
+}
+
+func main() {
+    av := args()
+    if len(av) < 2 { tw_fail("command required") }
+    cmd := av[1]
+    a := tw_shift(av, 2)
+    p := tw_client()
+    if cmd == "bootstrap" { tw_bootstrap(p)  return }
+    if cmd == "profile" { tw_profile(p, a)  return }
+    if cmd == "post" { tw_post(p, a)  return }
+    if cmd == "follow" { tw_follow(p, a)  return }
+    if cmd == "like" { tw_like(p, a)  return }
+    if cmd == "timeline" { tw_timeline(p, a)  return }
+    tw_fail("unknown command")
+}

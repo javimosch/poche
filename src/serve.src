@@ -166,6 +166,8 @@ func srv_handle(req) (res) {
         fv, _ := json_get(s, ".fields")
         doc, em := doc_from_json(unq(fv), trim(req.body))
         if em != "" { res = srv_err("400 Bad Request", "validation", em)  return }
+        uem := validate_unique(coll, unq(fv), doc, "")
+        if uem != "" { res = srv_err("409 Conflict", "exists", uem)  return }
         nid := to_hex(rand_bytes(8))
         if st_put(coll, nid, doc) == 0 { res = srv_err("500 Internal Server Error", "internal", "write failed")  return }
         res = srv_ok("{\"_id\":\"" + nid + "\",\"doc\":" + doc + "}")
@@ -204,6 +206,8 @@ func srv_handle(req) (res) {
         }
         doc, em := build_doc(fieldspec, kvs)
         if em != "" { res = srv_err("400 Bad Request", "validation", em)  return }
+        uem := validate_unique(coll, fieldspec, doc, id)
+        if uem != "" { res = srv_err("409 Conflict", "exists", uem)  return }
         if st_put(coll, id, doc) == 0 { res = srv_err("500 Internal Server Error", "internal", "write failed")  return }
         res = srv_ok("{\"_id\":\"" + id + "\",\"doc\":" + doc + "}")
         return
