@@ -58,6 +58,15 @@ func poche_list(p, coll, where, limit) (data) {
     data = poche_data(status, resp)
 }
 
+func poche_page(p, coll, where, limit, offset, sort_field, desc) (data) {
+    qs := "/api/" + coll + "?limit=" + str(limit) + "&offset=" + str(offset)
+    if len(where) > 0 { qs = qs + "&where=" + url_encode(where) }
+    if len(sort_field) > 0 { qs = qs + "&sort=" + url_encode(sort_field) }
+    if desc == 1 { qs = qs + "&order=desc" }
+    status, resp := poche_req(p, "GET", qs, "")
+    data = poche_data(status, resp)
+}
+
 func poche_get(p, coll, id) (doc, found) {
     doc = ""
     found = 0

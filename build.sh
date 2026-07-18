@@ -25,6 +25,7 @@ SRCS=(
   "$GRANGE_SRC/query.src"
   src/out.src
   src/store.src
+  src/query_page.src
   src/realtime.src
   src/schema.src
   src/data.src

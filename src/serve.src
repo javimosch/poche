@@ -161,7 +161,9 @@ func srv_handle(req) (res) {
     if req.method == "GET" && len(id) == 0 {
         if exposed_ok(coll, "read") == 0 { res = srv_err("403 Forbidden", "forbidden", "not exposed")  return }
         if allowed(tok, coll, "read") == 0 { res = srv_err("403 Forbidden", "auth", "token lacks read")  return }
-        res = srv_ok(st_find(coll, query(req, "where"), parse_int(query(req, "limit"))))
+        desc := 0
+        if query(req, "order") == "desc" { desc = 1 }
+        res = srv_ok(st_page(coll, query(req, "where"), parse_int(query(req, "limit")), parse_int(query(req, "offset")), query(req, "sort"), desc))
         return
     }
     if req.method == "GET" && len(id) > 0 {

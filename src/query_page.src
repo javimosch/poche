@@ -1,0 +1,66 @@
+// poche query paging — total/offset and numeric sort over grange candidates.
+
+func query_sort_ids(ids, field, desc) (out) {
+    out = []string{}
+    i := 0
+    while i < len(ids) {
+        id := ids[i]
+        tok, terr := json_get(g_mem[id], "." + field)
+        value := 0.0
+        if len(terr) == 0 { value = parse_float(tok) }
+        inserted := 0
+        next := []string{}
+        j := 0
+        while j < len(out) {
+            if inserted == 0 {
+                otok, oerr := json_get(g_mem[out[j]], "." + field)
+                oval := 0.0
+                if len(oerr) == 0 { oval = parse_float(otok) }
+                before := value < oval
+                if desc == 1 { before = value > oval }
+                if before {
+                    next = append(next, id)
+                    inserted = 1
+                }
+            }
+            next = append(next, out[j])
+            j = j + 1
+        }
+        if inserted == 0 { next = append(next, id) }
+        out = next
+        i = i + 1
+    }
+}
+
+func st_page(coll, where, limit, offset, sort_field, desc) (data) {
+    data = "{\"count\":0,\"total\":0,\"offset\":0,\"items\":[]}"
+    if st_use(coll) == 0 { return }
+    gr_sweep_expired()
+    fields, ops, vals := wh_pairs(where)
+    candidates, mode := wh_candidates(fields, ops, vals)
+    matches := []string{}
+    i := 0
+    while i < len(candidates) {
+        id := candidates[i]
+        if wh_match(g_mem[id], fields, ops, vals) == 1 {
+            matches = append(matches, id)
+        }
+        i = i + 1
+    }
+    if len(sort_field) > 0 {
+        matches = query_sort_ids(matches, sort_field, desc)
+        mode = mode + "+sort"
+    }
+    if offset < 0 { offset = 0 }
+    if offset > len(matches) { offset = len(matches) }
+    stop := len(matches)
+    if limit > 0 && offset + limit < stop { stop = offset + limit }
+    items := []string{}
+    i = offset
+    while i < stop {
+        id := matches[i]
+        items = append(items, "{\"id\":\"" + jesc(id) + "\",\"doc\":" + g_mem[id] + "}")
+        i = i + 1
+    }
+    data = "{\"count\":" + str(len(items)) + ",\"total\":" + str(len(matches)) + ",\"offset\":" + str(offset) + ",\"mode\":\"" + mode + "\",\"items\":[" + join(items, ",") + "]}"
+}

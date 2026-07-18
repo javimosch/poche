@@ -1,0 +1,113 @@
+// car-renting — fleet/availability/reservation backend using poche.
+// Commands: bootstrap | customer | car | reserve | available | cancel
+
+func cr_out(data) {
+    println("{\"ok\":true,\"app\":\"car-renting\",\"data\":" + data + "}")
+}
+
+func cr_fail(msg) {
+    write(2, "{\"ok\":false,\"error\":{\"type\":\"domain\",\"message\":\"" + msg + "\"}}\n")
+    exit(80)
+}
+
+func cr_client() (p) {
+    url := env("POCHE_URL")
+    if len(url) == 0 { url = "http://127.0.0.1:7700" }
+    token := env("POCHE_TOKEN")
+    if len(token) == 0 { cr_fail("POCHE_TOKEN required") }
+    p = poche_client(url, token)
+}
+
+func cr_bootstrap(p) {
+    ok := poche_schema(p, "rental_customers", "email:string!required!unique,name:string!,created_at:int!now")
+    if ok == 0 { cr_fail("customers schema failed") }
+    ok = poche_schema(p, "cars", "plate:string!required!unique,model:string!,city:string!,seats:int!min=1!max=9,daily_rate:int!min=0,active:bool!,created_at:int!now")
+    if ok == 0 { cr_fail("cars schema failed") }
+    ok = poche_schema(p, "bookings", "customer_id:string!ref=rental_customers,car_id:string!ref=cars,start_day:int!min=1,end_day:int!min=1,total_cents:int!min=0,status:string!,created_at:int!now")
+    if ok == 0 { cr_fail("bookings schema failed") }
+    poche_index(p, "rental_customers", "email")
+    poche_index(p, "cars", "city")
+    poche_index(p, "cars", "active")
+    poche_index(p, "bookings", "car_id")
+    poche_expose(p, "rental_customers", "read,create,update")
+    poche_expose(p, "cars", "read,create,update")
+    poche_expose(p, "bookings", "read,create,update,delete")
+    cr_out("{\"bootstrapped\":true,\"collections\":3}")
+}
+
+func cr_customer(p, a) {
+    if len(a) < 2 { cr_fail("customer <email> <name>") }
+    id, ok := poche_create(p, "rental_customers", "{\"email\":\"" + a[0] + "\",\"name\":\"" + a[1] + "\"}")
+    if ok == 0 { cr_fail("customer create failed") }
+    cr_out("{\"id\":\"" + id + "\"}")
+}
+
+func cr_car(p, a) {
+    if len(a) < 6 { cr_fail("car <plate> <model> <city> <seats> <daily_rate> <active>") }
+    doc := "{\"plate\":\"" + a[0] + "\",\"model\":\"" + a[1] + "\",\"city\":\"" + a[2] + "\",\"seats\":" + a[3] + ",\"daily_rate\":" + a[4] + ",\"active\":" + a[5] + "}"
+    id, ok := poche_create(p, "cars", doc)
+    if ok == 0 { cr_fail("car create failed") }
+    cr_out("{\"id\":\"" + id + "\",\"plate\":\"" + a[0] + "\"}")
+}
+
+func cr_reserve(p, a) {
+    if len(a) < 4 { cr_fail("reserve <customer_id> <car_id> <start_day> <end_day>") }
+    start := parse_int(a[2])
+    end := parse_int(a[3])
+    if end <= start { cr_fail("end_day must be after start_day") }
+    car, found := poche_get(p, "cars", a[1])
+    if found == 0 { cr_fail("car missing") }
+    av, _ := json_get(car, ".active")
+    ratev, re := json_get(car, ".daily_rate")
+    if av != "true" || len(re) > 0 { cr_fail("car inactive") }
+    // Interval overlap: existing.start < requested.end AND existing.end > requested.start.
+    where := "car_id=" + a[1] + ",start_day<" + str(end) + ",end_day>" + str(start)
+    overlaps := poche_list(p, "bookings", where, 1)
+    cv, ce := json_get(overlaps, ".total")
+    if len(ce) > 0 { cr_fail("availability query failed") }
+    if parse_int(cv) > 0 { cr_fail("car unavailable for interval") }
+    days := end - start
+    total := days * parse_int(ratev)
+    doc := "{\"customer_id\":\"" + a[0] + "\",\"car_id\":\"" + a[1] + "\",\"start_day\":" + str(start) + ",\"end_day\":" + str(end) + ",\"total_cents\":" + str(total) + ",\"status\":\"confirmed\"}"
+    id, ok := poche_create(p, "bookings", doc)
+    if ok == 0 { cr_fail("booking create failed") }
+    cr_out("{\"id\":\"" + id + "\",\"days\":" + str(days) + ",\"total_cents\":" + str(total) + "}")
+}
+
+func cr_available(p, a) {
+    if len(a) < 1 { cr_fail("available <city> [limit] [offset]") }
+    limit := 20
+    offset := 0
+    if len(a) > 1 { limit = parse_int(a[1]) }
+    if len(a) > 2 { offset = parse_int(a[2]) }
+    data := poche_page(p, "cars", "city=" + a[0] + ",active=true", limit, offset, "daily_rate", 0)
+    if len(data) == 0 { cr_fail("fleet query failed") }
+    cr_out(data)
+}
+
+func cr_cancel(p, a) {
+    if len(a) < 1 { cr_fail("cancel <booking_id>") }
+    if poche_delete(p, "bookings", a[0]) == 0 { cr_fail("cancel failed") }
+    cr_out("{\"cancelled\":\"" + a[0] + "\"}")
+}
+
+func cr_shift(xs, n) (out) {
+    out = []string{}
+    i := n
+    while i < len(xs) { out = append(out, xs[i])  i = i + 1 }
+}
+
+func main() {
+    av := args()
+    if len(av) < 2 { cr_fail("command required") }
+    cmd := av[1]
+    a := cr_shift(av, 2)
+    p := cr_client()
+    if cmd == "bootstrap" { cr_bootstrap(p)  return }
+    if cmd == "customer" { cr_customer(p, a)  return }
+    if cmd == "car" { cr_car(p, a)  return }
+    if cmd == "reserve" { cr_reserve(p, a)  return }
+    if cmd == "available" { cr_available(p, a)  return }
+    if cmd == "cancel" { cr_cancel(p, a)  return }
+    cr_fail("unknown command")
+}
