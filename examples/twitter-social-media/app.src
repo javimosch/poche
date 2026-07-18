@@ -78,9 +78,9 @@ func tw_timeline(p, a) {
     if len(a) < 1 { tw_fail("timeline <username> [limit]") }
     limit := 20
     if len(a) > 1 { limit = parse_int(a[1]) }
-    // Dogfood finding: this is only the user's own posts because poche v0.1
-    // has no sort/cursor/OR query yet.
-    data := poche_list(p, "posts", "author=" + a[0], limit)
+    // This endpoint intentionally shows own posts. A true followed-users feed
+    // remains domain composition (follows query + post pages), not CMS magic.
+    data := poche_page(p, "posts", "author=" + a[0], limit, 0, "created_at", 1)
     if len(data) == 0 { tw_fail("timeline query failed") }
     tw_out(data)
 }
