@@ -33,7 +33,7 @@
     <div class="w-12 h-12 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0"><span class="text-2xl">📚</span></div>
     <div>
       <h3 class="text-xl font-semibold text-white mb-2">Application-ready queries</h3>
-      <p class="text-white/40 leading-relaxed">Machine bootstrap endpoints, total-aware offset pagination, compound filters, and numeric sorting support timelines, catalogs, and fleet availability. The 100k bench reaches about 202k inserts/s locally.</p>
+      <p class="text-white/40 leading-relaxed">Machine bootstrap endpoints, total-aware offset pagination, compound filters, and numeric sorting support timelines, catalogs, and fleet availability. The 100k bench measured 185–202k inserts/s locally.</p>
     </div>
   </div>
 </div>

@@ -11,7 +11,7 @@ POCHE_DB=/tmp/poche-bench ./poche bench --n 100000
 | metric | result |
 |---|---|
 | n | 100_000 |
-| insert | **202k docs/s** (493 ms, v0.2 dogfood run) |
+| insert | **185k docs/s** (538 ms final v0.2 run; observed 185–202k) |
 | indexed find `status=paused` limit 50 | &lt;1 ms |
 | count paused | 33_334 |
 
