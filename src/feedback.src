@@ -1,45 +1,125 @@
-// poche feedback — cli-feedback-spec: local store + optional central relay.
+// poche feedback — cli-feedback-spec: app endpoint + central relay dual-write.
+
+var g_fb_win = 0
+var g_fb_n = 0
+
+func fb_rate_ok() (ok) {
+    ok = 1
+    w := now_ms() / 60000
+    if w != g_fb_win { g_fb_win = w  g_fb_n = 0 }
+    g_fb_n = g_fb_n + 1
+    if g_fb_n > 30 { ok = 0 }
+}
+
+func fb_post(url, payload) (ok) {
+    ok = 0
+    status, _, err := http_request("POST", url, []string{"content-type: application/json"}, payload)
+    if len(err) == 0 && status >= 200 && status < 300 { ok = 1 }
+}
+
+func fb_opt(args, flag, def) (v) {
+    v = def
+    i := 0
+    while i + 1 < len(args) {
+        if args[i] == flag { v = args[i + 1]  return }
+        i = i + 1
+    }
+}
+
+func fb_msg_args(args) (msg) {
+    msg = ""
+    parts := []string{}
+    i := 0
+    while i < len(args) {
+        if args[i] == "-kind" || args[i] == "-context" {
+            i = i + 2
+            continue
+        }
+        parts = append(parts, args[i])
+        i = i + 1
+    }
+    msg = join(parts, " ")
+}
 
 func h_feedback(req) (res) {
     if len(req.body) > 16384 {
-        res = srv_err("413 Payload Too Large", "input", "feedback too large")
+        res = response("413 Payload Too Large", "application/json", "{\"ok\":false,\"error\":\"feedback too large\"}")
+        return
+    }
+    if fb_rate_ok() == 0 {
+        res = response("429 Too Many Requests", "application/json", "{\"ok\":false,\"error\":\"rate limited\"}")
         return
     }
     mv, merr := json_get(req.body, ".message")
     msg := ""
     if len(merr) == 0 { msg = trim(unq(mv)) }
     if len(msg) == 0 {
-        res = srv_err("400 Bad Request", "input", "message required")
+        res = response("400 Bad Request", "application/json", "{\"ok\":false,\"error\":\"message required\"}")
         return
     }
     idv, _ := json_get(req.body, ".id")
     id := unq(idv)
     if len(id) == 0 { id = to_hex(rand_bytes(16)) }
     kv, _ := json_get(req.body, ".kind")
+    kind := unq(kv)
+    if len(kind) == 0 { kind = "note" }
     cv, _ := json_get(req.body, ".context")
     rv, _ := json_get(req.body, ".reporter")
     vv, _ := json_get(req.body, ".version")
-    doc := "{\"id\":\"" + id + "\",\"kind\":\"" + jesc_p(unq(kv)) + "\",\"message\":\"" + jesc_p(msg) + "\",\"context\":\"" + jesc_p(unq(cv)) + "\",\"reporter\":\"" + jesc_p(unq(rv)) + "\",\"version\":\"" + jesc_p(unq(vv)) + "\",\"created\":" + str(now_ms()) + "}"
-    // idempotent: ignore if exists
+    doc := "{\"id\":\"" + id + "\",\"app\":\"poche\",\"kind\":\"" + jesc_p(kind) + "\",\"message\":\"" + jesc_p(msg) + "\",\"context\":\"" + jesc_p(unq(cv)) + "\",\"reporter\":\"" + jesc_p(unq(rv)) + "\",\"version\":\"" + jesc_p(unq(vv)) + "\",\"created\":" + str(now_ms()) + "}"
     _, exists := st_get("_feedback", id)
     if exists == 0 { st_put("_feedback", id, doc) }
-    res = srv_ok("{\"id\":\"" + id + "\",\"stored\":true}")
+    res = response("200 OK", "application/json", "{\"ok\":true,\"id\":\"" + id + "\",\"stored\":true}")
+}
+
+func h_feedback_list(req, tok) (res) {
+    admin := env("FEEDBACK_ADMIN_TOKEN")
+    if len(admin) == 0 {
+        res = response("403 Forbidden", "application/json", "{\"ok\":false,\"error\":\"reads off (set FEEDBACK_ADMIN_TOKEN)\"}")
+        return
+    }
+    if tok != admin && admin_allowed(tok) == 0 {
+        res = response("403 Forbidden", "application/json", "{\"ok\":false,\"error\":\"admin token required\"}")
+        return
+    }
+    lim := parse_int(query(req, "limit"))
+    if lim < 1 { lim = 50 }
+    if lim > 200 { lim = 200 }
+    res = response("200 OK", "application/json", "{\"ok\":true,\"feedback\":" + st_all("_feedback", lim) + "}")
 }
 
 func cmd_feedback(args) {
-    if len(args) < 1 { out_err(80, "input", "usage: poche feedback <message>", "") }
-    msg := join(args, " ")
+    if len(args) < 1 { out_err(80, "input", "usage: poche feedback \"<message>\" [-kind bug|idea|praise|note] [-context \"…\"]", "") }
+    msg := trim(fb_msg_args(args))
+    if len(msg) == 0 { out_err(80, "input", "message required", "") }
+    kind := fb_opt(args, "-kind", "note")
+    ctx := fb_opt(args, "-context", "cli")
+    reporter := env("USER")
+    if len(reporter) == 0 { reporter = "agent" }
     id := to_hex(rand_bytes(16))
-    doc := "{\"id\":\"" + id + "\",\"kind\":\"feedback\",\"message\":\"" + jesc_p(msg) + "\",\"context\":\"cli\",\"reporter\":\"\",\"version\":\"" + poche_version() + "\",\"created\":" + str(now_ms()) + "}"
-    st_put("_feedback", id, doc)
-    // dual-write relay (never fail caller)
+    payload := "{\"id\":\"" + id + "\",\"app\":\"poche\",\"version\":\"" + poche_version() + "\",\"kind\":\"" + jesc_p(kind) + "\",\"message\":\"" + jesc_p(msg) + "\",\"context\":\"" + jesc_p(ctx) + "\",\"reporter\":\"" + jesc_p(reporter) + "\"}"
+
+    stored := 0
+    app := env("POCHE_URL")
+    if len(app) == 0 { app = env("POCHE_PUBLIC_URL") }
+    if len(app) > 0 {
+        stored = fb_post(app + "/v1/feedback", payload)
+        if stored == 0 { eprint("{\"event\":\"feedback_app_skip\",\"reason\":\"network_or_http\"}") }
+    } else {
+        doc := "{\"id\":\"" + id + "\",\"app\":\"poche\",\"kind\":\"" + jesc_p(kind) + "\",\"message\":\"" + jesc_p(msg) + "\",\"context\":\"" + jesc_p(ctx) + "\",\"reporter\":\"" + jesc_p(reporter) + "\",\"version\":\"" + poche_version() + "\",\"created\":" + str(now_ms()) + "}"
+        st_put("_feedback", id, doc)
+        stored = 1
+    }
+
+    relayed := 0
     relay := env("FEEDBACK_RELAY")
     if relay != "off" {
-        url := "https://feedback.intrane.fr/v1/feedback"
+        url := "https://feedback.intrane.fr"
         if len(relay) > 0 && relay != "on" { url = relay }
-        body := "{\"id\":\"" + id + "\",\"kind\":\"feedback\",\"message\":\"" + jesc_p(msg) + "\",\"tool\":\"poche\",\"version\":\"" + poche_version() + "\"}"
-        status, resp, herr := http_request("POST", url, []string{"content-type: application/json"}, body)
-        if len(herr) > 0 || status == 0 { eprint("{\"event\":\"relay_skip\",\"reason\":\"network\"}") }
+        // accept either base or full /v1/feedback URL
+        if has_suffix(url, "/v1/feedback") == false { url = url + "/v1/feedback" }
+        relayed = fb_post(url, payload)
+        if relayed == 0 { eprint("{\"event\":\"relay_skip\",\"reason\":\"network\"}") }
     }
-    out_ok("{\"id\":\"" + id + "\",\"stored\":true}")
+    out_ok("{\"id\":\"" + id + "\",\"stored\":" + str(stored) + ",\"relayed\":" + str(relayed) + "}")
 }

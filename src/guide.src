@@ -1,7 +1,66 @@
-// poche guide + help-json (cli-guide-spec / cli-output-spec).
+// poche guide + help-json + llms.txt (cli-guide-spec / cli-output-spec).
 
 func guide_json() (s) {
-    s = "{\"tool\":\"poche\",\"version\":\"" + poche_version() + "\",\"model\":\"agent-first headless CMS over grange: typed schemas, constraints, RBAC, REST, atomic mutations, paging/sort, long-poll /watch, file blobs, optional POCHE_CLOUD multi-tenant. No Admin UI.\",\"loop\":[\"poche init → admin_token\",\"poche schema define <coll> field:type…\",\"poche schema index <coll> <field>\",\"poche data create/list/get/update/delete\",\"poche role add / grant / user add\",\"poche schema expose <coll> read,create,update,delete\",\"poche serve [port]\",\"GET /watch?coll=&since=&timeout= · GET /files/:id\",\"cloud: POCHE_CLOUD=1 → POST /tenants (X-Peage-Wallet) → Bearer pt_…\"],\"concepts\":{\"db\":\"POCHE_DB dir (default ./poche.data); grange collections underneath\",\"schema\":\"types string|int|float|bool; modifiers !required !unique !now !min=N !max=N !ref=collection\",\"query\":\"where supports AND equality/ranges; limit+offset+total; numeric sort/order\",\"mutations\":\"POST /api/:coll/:id/increment or /compare-swap are single-actor atomic\",\"expose\":\"HTTP gate for actions; CLI always works locally\",\"token\":\"Bearer user token; cloud pt_ tenant token is admin for its namespace\",\"watch\":\"long-poll change feed. seq is monotonic per collection process-lifetime. since=0 always resyncs. If resync=1, re-list then continue from seq.\",\"files\":\"CLI file put stores blobs under POCHE_DB/_blobs; GET /files/:id streams bytes\"},\"edge_cases\":[\"docs must be single-line minified JSON\",\"serve is single-actor (grange-safe) — do not wrap in machweb serve()\",\"cold since=0 ⇒ resync:1 is normal\",\"sort is numeric in v0.2\"],\"exit_codes\":{\"0\":\"ok\",\"80-89\":\"input/validation\",\"90-99\":\"not found / exists\",\"100-109\":\"integration\",\"110-119\":\"internal\"},\"storage\":\"grange\",\"specs\":\"https://cli-specs.intrane.fr/\"}"
+    s = "{"
+    s = s + "\"poche\":\"agent-first headless CMS over grange (no Admin UI)\","
+    s = s + "\"one_liner\":\"Typed schemas, RBAC, REST, atomic mutations, paging/sort, long-poll /watch, file blobs, optional POCHE_CLOUD multi-tenant. Storage is grange; single-actor HTTP only.\","
+    s = s + "\"version\":\"" + poche_version() + "\","
+    s = s + "\"model\":{"
+    s = s + "\"role\":\"PocketBase-inspired CMS for agents — CLI + HTTP, never a browser UI\","
+    s = s + "\"storage\":\"grange document DB under POCHE_DB (default ./poche.data)\","
+    s = s + "\"http\":\"poche serve uses listen/accept (single-actor); do not wrap in machweb serve()\","
+    s = s + "\"auth\":\"Bearer user token; admin has _admin; cloud pt_ tenant token is admin for its namespace\","
+    s = s + "\"specs\":\"https://cli-specs.intrane.fr/\""
+    s = s + "},"
+    s = s + "\"loop\":["
+    s = s + "\"poche init → admin_token\","
+    s = s + "\"poche schema define <coll> field:type…\","
+    s = s + "\"poche schema index <coll> <field> [--range]\","
+    s = s + "\"poche data create|list|get|update|delete\","
+    s = s + "\"poche role add / grant / user add\","
+    s = s + "\"poche schema expose <coll> read,create,update,delete\","
+    s = s + "\"poche serve [port]\","
+    s = s + "\"GET /watch?coll=&since=&timeout= · GET /files/:id\","
+    s = s + "\"cloud: POCHE_CLOUD=1 → POST /tenants (X-Peage-Wallet) → Bearer pt_…\""
+    s = s + "],"
+    s = s + "\"concepts\":{"
+    s = s + "\"db\":\"POCHE_DB dir; grange collections underneath\","
+    s = s + "\"schema\":\"types string|int|float|bool; modifiers !required !unique !now !min=N !max=N !ref=collection\","
+    s = s + "\"query\":\"where AND equality/ranges; limit+offset+total; numeric sort/order; GET …/count\","
+    s = s + "\"mutations\":\"POST /api/:coll/:id/increment|compare-swap are single-actor atomic\","
+    s = s + "\"expose\":\"HTTP gate for actions; CLI always works locally\","
+    s = s + "\"watch\":\"long-poll change feed; seq monotonic per process; since=0 ⇒ resync:1\","
+    s = s + "\"files\":\"file put → POCHE_DB/_blobs; GET /files/:id needs _files read grant\""
+    s = s + "},"
+    s = s + "\"commands\":{"
+    s = s + "\"local\":[\"poche init\",\"poche schema define|list|get|expose|unexpose|index\",\"poche data create|list|get|update|delete\",\"poche role add|list\",\"poche grant <role> <coll> <actions>\",\"poche user add|list\",\"poche file put|get|list|delete\",\"poche serve [port]\",\"poche bench\"],"
+    s = s + "\"agent\":[\"poche guide [--human]\",\"poche help-json\",\"poche feedback \\\"<msg>\\\" [-kind …] [-context …]\",\"poche update [--check|--force]\",\"poche version\"]"
+    s = s + "},"
+    s = s + "\"examples\":["
+    s = s + "{\"goal\":\"bootstrap a blog\",\"do\":[\"export POCHE_DB=./blog.data\",\"poche init\",\"poche schema define posts title:string!required body:string views:int!min=0\",\"poche data create posts title=Hi body=Hello views=0\",\"poche serve 8080\"]},"
+    s = s + "{\"goal\":\"atomic stock decrement\",\"do\":[\"poche schema define products stock:int!min=0\",\"poche data create products stock=5\",\"curl -X POST -H \\\"Authorization: Bearer $ADMIN\\\" -d '{\\\"field\\\":\\\"stock\\\",\\\"delta\\\":-1}' http://127.0.0.1:8080/api/products/$ID/increment\"]}"
+    s = s + "],"
+    s = s + "\"gotchas\":["
+    s = s + "\"docs must be single-line minified JSON\","
+    s = s + "\"serve is single-actor (grange-safe) — do not wrap in machweb serve()\","
+    s = s + "\"cold since=0 ⇒ resync:1 is normal\","
+    s = s + "\"sort is numeric in v0.2\","
+    s = s + "\"stdout=JSON data, stderr=typed errors, exit codes 0/80-119\","
+    s = s + "\"update uses content-hash (sha256[:12]), not semver\""
+    s = s + "],"
+    s = s + "\"see_also\":[\"poche help-json\",\"poche version\",\"https://cli-specs.intrane.fr/\"]"
+    s = s + "}"
+}
+
+func llms_txt() (s) {
+    s = "poche — agent-first headless CMS over grange\n"
+    s = s + "CLI: poche guide   (embedded mental model, offline)\n"
+    s = s + "HTTP: GET /guide  (same JSON) · GET /llms.txt (this file)\n"
+    s = s + "Quick start:\n"
+    s = s + "  1. export POCHE_DB=./poche.data && poche init\n"
+    s = s + "  2. poche schema define <coll> field:type…\n"
+    s = s + "  3. poche schema expose <coll> read,create && poche serve\n"
+    s = s + "Specs: https://cli-specs.intrane.fr/\n"
 }
 
 func cmd_guide(args) {
@@ -12,11 +71,25 @@ func cmd_guide(args) {
         i = i + 1
     }
     if human == 1 {
-        println("poche — agent-first headless CMS (grange-backed)")
-        println("loop: init → schema → data → grant → expose → serve")
-        println("watch: start since=data.seq from first response; since=0 ⇒ resync")
-        println("cloud: POCHE_CLOUD=1 + POST /tenants")
-        println("specs: https://cli-specs.intrane.fr/")
+        println("# poche")
+        println("")
+        println("Agent-first headless CMS over grange. No Admin UI.")
+        println("")
+        println("## Loop")
+        println("1. poche init → admin_token")
+        println("2. poche schema define <coll> field:type…")
+        println("3. poche data create|list|get|update|delete")
+        println("4. poche role/grant/user + schema expose")
+        println("5. poche serve [port]")
+        println("")
+        println("## Gotchas")
+        println("- single-actor HTTP only (no machweb serve() with the engine)")
+        println("- watch since=0 ⇒ resync:1")
+        println("- update = content-hash sha256[:12]")
+        println("")
+        println("## See also")
+        println("- poche help-json")
+        println("- https://cli-specs.intrane.fr/")
         exit(0)
     }
     println(guide_json())
@@ -24,6 +97,30 @@ func cmd_guide(args) {
 }
 
 func cmd_help_json() {
-    println("{\"tool\":\"poche\",\"version\":\"" + poche_version() + "\",\"summary\":\"agent-first headless CMS over grange\",\"commands\":[{\"name\":\"init\"},{\"name\":\"schema define|list|get|expose|unexpose|index\"},{\"name\":\"data create|list|get|update|delete\"},{\"name\":\"role add|list\"},{\"name\":\"grant\"},{\"name\":\"user add|list\"},{\"name\":\"file put|get|list|delete\"},{\"name\":\"serve\"},{\"name\":\"bench\"},{\"name\":\"guide\"},{\"name\":\"help-json\"},{\"name\":\"feedback\"},{\"name\":\"update\",\"flags\":[\"--check\",\"--force\"]},{\"name\":\"version\"}],\"http\":[\"GET /health\",\"GET /guide\",\"POST /admin/schema|index|expose\",\"GET /api/:coll?where&limit&offset&sort&order\",\"POST /api/:coll\",\"PUT /api/:coll/:id\",\"DELETE /api/:coll/:id\",\"POST /api/:coll/:id/increment|compare-swap\",\"GET /watch\",\"GET /files/:id\",\"POST /tenants\",\"POST /v1/feedback\",\"GET /v1/version\"],\"exit_codes\":{\"0\":\"ok\",\"80-89\":\"input\",\"90-99\":\"resource\",\"100-109\":\"integration\",\"110-119\":\"internal\"}}")
+    s := "{"
+    s = s + "\"tool\":\"poche\",\"version\":\"" + poche_version() + "\",\"output\":\"json\","
+    s = s + "\"summary\":\"agent-first headless CMS over grange\","
+    s = s + "\"commands\":{"
+    s = s + "\"init\":{\"args\":[],\"flags\":[],\"auth\":false},"
+    s = s + "\"schema\":{\"args\":[\"define|list|get|expose|unexpose|index\", \"…\"],\"flags\":[\"--range\"],\"auth\":false},"
+    s = s + "\"data\":{\"args\":[\"create|list|get|update|delete\", \"…\"],\"flags\":[],\"auth\":false},"
+    s = s + "\"role\":{\"args\":[\"add|list\", \"…\"],\"flags\":[],\"auth\":false},"
+    s = s + "\"grant\":{\"args\":[\"<role>\",\"<collection>\",\"<actions>\"],\"flags\":[],\"auth\":false},"
+    s = s + "\"user\":{\"args\":[\"add|list\", \"…\"],\"flags\":[],\"auth\":false},"
+    s = s + "\"file\":{\"args\":[\"put|get|list|delete\", \"…\"],\"flags\":[],\"auth\":false},"
+    s = s + "\"serve\":{\"args\":[\"[port]\"],\"flags\":[],\"auth\":false},"
+    s = s + "\"bench\":{\"args\":[],\"flags\":[],\"auth\":false},"
+    s = s + "\"guide\":{\"args\":[],\"flags\":[\"--human\"],\"auth\":false},"
+    s = s + "\"help-json\":{\"args\":[],\"flags\":[],\"auth\":false},"
+    s = s + "\"feedback\":{\"args\":[\"<message>\"],\"flags\":[\"-kind\",\"-context\"],\"auth\":false},"
+    s = s + "\"update\":{\"args\":[],\"flags\":[\"--check\",\"--force\"],\"auth\":false},"
+    s = s + "\"version\":{\"args\":[],\"flags\":[],\"auth\":false}"
+    s = s + "},"
+    s = s + "\"http\":[\"GET /health\",\"GET /_health\",\"GET /guide\",\"GET /llms.txt\",\"GET /version\",\"GET /v1/version\",\"POST /v1/feedback\",\"GET /v1/feedback\",\"POST /admin/schema|index|expose\",\"GET|POST|PUT|DELETE /api/:coll\",\"POST /api/:coll/:id/increment|compare-swap\",\"GET /watch\",\"GET /files/:id\",\"POST /tenants\"],"
+    s = s + "\"exit_codes\":{\"0\":\"success\",\"5\":\"update available (--check)\",\"80\":\"input/validation\",\"90\":\"precondition/resource\",\"100\":\"external/integration\",\"110\":\"internal\"},"
+    s = s + "\"env\":[\"POCHE_DB\",\"POCHE_CLOUD\",\"POCHE_URL\",\"POCHE_PUBLIC_URL\",\"POCHE_VERSION_URL\",\"POCHE_UPDATE_URL\",\"POCHE_UPDATE_BASE\",\"POCHE_DIST\",\"POCHE_BIN\",\"POCHE_NO_NUDGE\",\"POCHE_MERCHANT_KEY\",\"FEEDBACK_RELAY\",\"FEEDBACK_ADMIN_TOKEN\"],"
+    s = s + "\"see_also\":[\"guide\"]"
+    s = s + "}"
+    println(s)
     exit(0)
 }

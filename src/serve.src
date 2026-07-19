@@ -73,11 +73,15 @@ func srv_handle(req) (res) {
         res = response("200 OK", "application/json", guide_json())
         return
     }
+    if req.method == "GET" && p == "/llms.txt" {
+        res = response("200 OK", "text/plain; charset=utf-8", llms_txt())
+        return
+    }
     if req.method == "POST" && p == "/v1/feedback" {
         res = h_feedback(req)
         return
     }
-    if req.method == "GET" && p == "/v1/version" {
+    if req.method == "GET" && (p == "/version" || p == "/v1/version") {
         res = h_version()
         return
     }
@@ -89,10 +93,15 @@ func srv_handle(req) (res) {
     tok := bearer(req)
     if cloud_activate(tok) == 0 && cloud_on() == 1 {
         // allow admin root token only for /health already returned; else 401
-        if p != "/health" && p != "/_health" && p != "/guide" {
+        if p != "/health" && p != "/_health" && p != "/guide" && p != "/llms.txt" && p != "/version" && p != "/v1/version" {
             res = srv_err("401 Unauthorized", "auth", "unknown tenant token (POST /tenants with X-Peage-Wallet)")
             return
         }
+    }
+
+    if req.method == "GET" && p == "/v1/feedback" {
+        res = h_feedback_list(req, tok)
+        return
     }
 
     if req.method == "POST" && p == "/admin/schema" {

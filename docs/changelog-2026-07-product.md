@@ -1,39 +1,36 @@
-<div class="feature-card rounded-xl p-6 mb-4">
-  <div class="flex items-start gap-4">
-    <div class="w-12 h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0"><span class="text-2xl">🐕</span></div>
-    <div>
-      <h3 class="text-xl font-semibold text-white mb-2">Three real machin backends</h3>
-      <p class="text-white/40 leading-relaxed">Twitter-style social media, an Amazon-style marketplace, and car renting now compile and run end-to-end against poche. Their smoke suites exercise real domain invariants, not just CRUD.</p>
-    </div>
-  </div>
-</div>
 
-<div class="feature-card rounded-xl p-6 mb-4">
-  <div class="flex items-start gap-4">
-    <div class="w-12 h-12 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0"><span class="text-2xl">🛡️</span></div>
-    <div>
-      <h3 class="text-xl font-semibold text-white mb-2">19 dogfood gaps fixed</h3>
-      <p class="text-white/40 leading-relaxed">Required and unique fields, server timestamps, numeric bounds, references, safe SDK escaping, and strict schema validation make malformed application data fail early and predictably.</p>
-    </div>
-  </div>
-</div>
+        <div class="feature-card rounded-xl p-6">
+          <div class="flex items-start gap-4">
+            <div class="w-12 h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+              <span class="text-2xl">◆</span>
+            </div>
+            <div>
+              <h3 class="text-xl font-semibold text-white mb-2">Full cli-specs alignment</h3>
+              <p class="text-white/40 leading-relaxed">poche now conforms to all four <a class="text-emerald-400" href="https://cli-specs.intrane.fr/">cli-specs</a>: structured <code>guide</code> + <code>/llms.txt</code>, richer <code>help-json</code>, dual-write <code>feedback</code> with admin-gated reads, and content-hash <code>update</code> (verify → smoke → atomic swap + stderr nudge).</p>
+            </div>
+          </div>
+        </div>
 
-<div class="feature-card rounded-xl p-6 mb-4">
-  <div class="flex items-start gap-4">
-    <div class="w-12 h-12 rounded-lg bg-purple-500/10 flex items-center justify-center flex-shrink-0"><span class="text-2xl">⚛️</span></div>
-    <div>
-      <h3 class="text-xl font-semibold text-white mb-2">Stock-safe atomic mutations</h3>
-      <p class="text-white/40 leading-relaxed">Atomic increment and compare-and-swap endpoints prevent lost updates and marketplace overselling while preserving poche's single-actor correctness model.</p>
-    </div>
-  </div>
-</div>
+        <div class="feature-card rounded-xl p-6">
+          <div class="flex items-start gap-4">
+            <div class="w-12 h-12 rounded-lg bg-sky-500/10 flex items-center justify-center flex-shrink-0">
+              <span class="text-2xl">◉</span>
+            </div>
+            <div>
+              <h3 class="text-xl font-semibold text-white mb-2">Self-update you can trust</h3>
+              <p class="text-white/40 leading-relaxed">Versions are <code>sha256[:12]</code> of the binary. <code>poche update</code> downloads, verifies the hash, runs <code>version</code> as a smoke test, then swaps with a <code>.bak</code> rollback. <code>install.sh</code> writes the same VERSION file agents rely on.</p>
+            </div>
+          </div>
+        </div>
 
-<div class="feature-card rounded-xl p-6">
-  <div class="flex items-start gap-4">
-    <div class="w-12 h-12 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0"><span class="text-2xl">📚</span></div>
-    <div>
-      <h3 class="text-xl font-semibold text-white mb-2">Application-ready queries</h3>
-      <p class="text-white/40 leading-relaxed">Machine bootstrap endpoints, total-aware offset pagination, compound filters, and numeric sorting support timelines, catalogs, and fleet availability. The 100k bench measured 185–202k inserts/s locally.</p>
-    </div>
-  </div>
-</div>
+        <div class="feature-card rounded-xl p-6">
+          <div class="flex items-start gap-4">
+            <div class="w-12 h-12 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+              <span class="text-2xl">▣</span>
+            </div>
+            <div>
+              <h3 class="text-xl font-semibold text-white mb-2">Dogfood backends + CMS hardening</h3>
+              <p class="text-white/40 leading-relaxed">Three compiled example backends (social, marketplace, car renting), plus earlier v0.2 fixes: file blob unlink + RBAC, count API, range indexes, CORS preflight, and POST 201.</p>
+            </div>
+          </div>
+        </div>

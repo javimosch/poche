@@ -6,6 +6,8 @@ cd "$(dirname "$0")"
 DB=$(mktemp -d /tmp/poche-test-XXXX)
 export POCHE_DB="$DB"
 export FEEDBACK_RELAY=off
+export POCHE_NO_NUDGE=1
+export FEEDBACK_ADMIN_TOKEN=test-feedback-admin
 INIT=$(./poche init)
 ADMIN=$(printf '%s' "$INIT" | sed -n 's/.*"admin_token":"\([^"]*\)".*/\1/p')
 ./poche schema define authors name:string!required!unique >/dev/null
@@ -59,6 +61,22 @@ curl -sf -X POST -H "Authorization: Bearer $ADMIN" -H 'content-type: application
 curl -sf -X POST -H "Authorization: Bearer $ADMIN" -H 'content-type: application/json' \
   -d '{"field":"stock","expect":3,"value":2}' \
   "http://127.0.0.1:17701/api/products/$PRODUCT_ID/compare-swap" | grep -q '"stock":2'
-./poche guide >/dev/null
-./poche help-json >/dev/null
+./poche guide | grep -q '"one_liner"'
+./poche guide | grep -q '"gotchas"'
+./poche help-json | grep -q '"env"'
+./poche help-json | grep -q '"see_also"'
+./poche feedback "smoke feedback" -kind note -context test | grep -q '"stored":1'
+curl -sf http://127.0.0.1:17701/llms.txt | grep -q 'poche guide'
+curl -sf http://127.0.0.1:17701/version | grep -q '"ok":true'
+curl -sf http://127.0.0.1:17701/guide | grep -q '"one_liner"'
+curl -sf -X POST -H 'content-type: application/json' \
+  -d '{"message":"http feedback","id":"smoke-fb-1"}' \
+  http://127.0.0.1:17701/v1/feedback | grep -q '"stored":true'
+curl -sf -H "Authorization: Bearer $FEEDBACK_ADMIN_TOKEN" \
+  'http://127.0.0.1:17701/v1/feedback?limit=5' | grep -q '"ok":true'
+test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:17701/v1/feedback)" = 403
+# content-hash local version (sha256[:12]) + update --check
+HASH12=$(sha256sum ./poche | cut -c1-12)
+./poche version | grep -q "$HASH12"
+POCHE_VERSION_URL=http://127.0.0.1:17701/version ./poche update --check | grep -q '"up_to_date":true'
 echo "OK smoke ($DB)"

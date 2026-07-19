@@ -12,12 +12,32 @@ func shift(args, n) (out) {
     while i < len(args) { out = append(out, args[i])  i = i + 1 }
 }
 
+func strip_global_flags(args) (out) {
+    // Non-interactive by default; accept --yes/-y/--no-interactive/--json as no-ops.
+    out = []string{}
+    i := 0
+    while i < len(args) {
+        a := args[i]
+        if a == "--yes" || a == "-y" || a == "--no-interactive" || a == "--json" {
+            i = i + 1
+            continue
+        }
+        out = append(out, a)
+        i = i + 1
+    }
+}
+
 func main() {
     argv := args()
     // args()[0] is the program path
     if len(argv) < 2 { usage() }
     cmd := argv[1]
-    rest := shift(argv, 2)
+    rest := strip_global_flags(shift(argv, 2))
+
+    // Passive update nudge on server-touching commands (cli-update-spec §4).
+    if cmd != "version" && cmd != "guide" && cmd != "help-json" && cmd != "update" {
+        if cmd == "serve" || cmd == "feedback" { version_nudge() }
+    }
 
     if cmd == "version" { cmd_version() }
     if cmd == "guide" { cmd_guide(rest) }

@@ -1,5 +1,7 @@
 {
-  "version": "0.2.1",
+  "ok": true,
+  "version": "66381a6a57ed",
   "download": "https://github.com/javimosch/poche/releases/latest/download/poche-linux-amd64",
-  "sha256": ""
+  "sha256": "66381a6a57ed408748e8fe7217b3783f59cd0bacb4b599a7876362a33c5efb45",
+  "semver": "0.2.2"
 }
