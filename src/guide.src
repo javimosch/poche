@@ -26,7 +26,7 @@ func guide_json() (s) {
     s = s + "\"concepts\":{"
     s = s + "\"db\":\"POCHE_DB dir; grange collections underneath\","
     s = s + "\"schema\":\"types string|int|float|bool; modifiers !required !unique !now !min=N !max=N !ref=collection\","
-    s = s + "\"query\":\"where AND equality/ranges; limit+offset+total; numeric sort/order; GET …/count\","
+    s = s + "\"query\":\"where AND: equality, ranges, and ~= substring contains (case-insensitive); limit+offset+total; numeric sort/order; GET …/count\","
     s = s + "\"mutations\":\"POST /api/:coll/:id/increment|compare-swap are single-actor atomic\","
     s = s + "\"expose\":\"HTTP gate for actions; CLI always works locally\","
     s = s + "\"watch\":\"long-poll change feed; seq monotonic per process; since=0 ⇒ resync:1\","
