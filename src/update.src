@@ -1,6 +1,6 @@
 // poche update — cli-update-spec: content-hash verify-then-swap + nudge.
 
-func poche_version() (v) { v = "0.2.2" }
+func poche_version() (v) { v = "0.2.3" }
 
 func path_readable(p) (yes) {
     yes = 0

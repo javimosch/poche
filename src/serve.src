@@ -181,6 +181,15 @@ func srv_handle(req) (res) {
     if req.method == "GET" && id == "count" {
         if exposed_ok(coll, "read") == 0 { res = srv_err("403 Forbidden", "forbidden", "not exposed")  return }
         if allowed(tok, coll, "read") == 0 { res = srv_err("403 Forbidden", "auth", "token lacks read")  return }
+        has_specs := query_all(req, "has_link")
+        miss_specs := query_all(req, "missing_link")
+        if len(has_specs) > 0 || len(miss_specs) > 0 {
+            n, em := st_count_linked(coll, query(req, "where"), has_specs, miss_specs)
+            if len(em) > 0 { res = srv_err("400 Bad Request", "validation", em)  return }
+            if n < 0 { res = srv_err("500 Internal Server Error", "internal", "count failed")  return }
+            res = srv_ok("{\"count\":" + str(n) + "}")
+            return
+        }
         n := st_count(coll, query(req, "where"))
         if n < 0 { res = srv_err("500 Internal Server Error", "internal", "count failed")  return }
         res = srv_ok("{\"count\":" + str(n) + "}")
@@ -209,6 +218,14 @@ func srv_handle(req) (res) {
         }
         desc := 0
         if query(req, "order") == "desc" { desc = 1 }
+        has_specs := query_all(req, "has_link")
+        miss_specs := query_all(req, "missing_link")
+        if len(has_specs) > 0 || len(miss_specs) > 0 {
+            page, em := st_page_linked(coll, query(req, "where"), has_specs, miss_specs, limit, offset, sort_field, desc)
+            if len(em) > 0 { res = srv_err("400 Bad Request", "validation", em)  return }
+            res = srv_ok(page)
+            return
+        }
         res = srv_ok(st_page(coll, query(req, "where"), limit, offset, sort_field, desc))
         return
     }

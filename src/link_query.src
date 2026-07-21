@@ -1,0 +1,209 @@
+// poche link_query — has_link / missing_link filters (join presence/absence).
+// Spec: join_coll.fk:field=value
+//   has_link=message_tags.message_id:tag=archive
+//   missing_link=message_tags.message_id:tag=archive
+// Multiple has_link ⇒ AND (intersect). Multiple missing_link ⇒ AND (exclude union).
+
+func query_all(req, name) (vals) {
+    vals = []string{}
+    qi := index(req.path, "?")
+    if qi < 0 { return }
+    parts := split(substr(req.path, qi + 1, len(req.path)), "&")
+    i := 0
+    while i < len(parts) {
+        part := parts[i]
+        eq := index(part, "=")
+        if eq > 0 {
+            if substr(part, 0, eq) == name {
+                vals = append(vals, url_decode(substr(part, eq + 1, len(part))))
+            }
+        }
+        i = i + 1
+    }
+}
+
+func link_parse(spec) (join_coll, fk, filter_field, filter_val, ok) {
+    join_coll = ""
+    fk = ""
+    filter_field = ""
+    filter_val = ""
+    ok = 0
+    colon := index(spec, ":")
+    if colon < 1 { return }
+    left := substr(spec, 0, colon)
+    right := substr(spec, colon + 1, len(spec))
+    dot := index(left, ".")
+    if dot < 1 { return }
+    eq := index(right, "=")
+    if eq < 1 { return }
+    join_coll = substr(left, 0, dot)
+    fk = substr(left, dot + 1, len(left))
+    filter_field = substr(right, 0, eq)
+    filter_val = substr(right, eq + 1, len(right))
+    if len(join_coll) == 0 || len(fk) == 0 || len(filter_field) == 0 { return }
+    ok = 1
+}
+
+// link_fk_set loads join_coll and returns map of parent ids referenced by fk
+// for rows matching field=value.
+func link_fk_set(join_coll, fk, filter_field, filter_val) (set, n, err) {
+    set = make(map[string]int)
+    n = 0
+    err = 0
+    if st_use(join_coll) == 0 { err = 1  return }
+    gr_sweep_expired()
+    wh := filter_field + "=" + filter_val
+    fields, ops, vals := wh_pairs(wh)
+    candidates, _ := wh_candidates(fields, ops, vals)
+    i := 0
+    while i < len(candidates) {
+        id := candidates[i]
+        if wh_match(g_mem[id], fields, ops, vals) == 1 {
+            tok, terr := json_get(g_mem[id], "." + fk)
+            if len(terr) == 0 {
+                mid := wh_unquote(tok)
+                if len(mid) > 0 {
+                    if set[mid] == 0 { n = n + 1 }
+                    set[mid] = 1
+                }
+            }
+        }
+        i = i + 1
+    }
+}
+
+func link_intersect(a, b) (out, n) {
+    out = make(map[string]int)
+    n = 0
+    aks := keys(a)
+    i := 0
+    while i < len(aks) {
+        k := aks[i]
+        if b[k] == 1 {
+            out[k] = 1
+            n = n + 1
+        }
+        i = i + 1
+    }
+}
+
+func link_union(a, b) (out, n) {
+    out = make(map[string]int)
+    n = 0
+    aks := keys(a)
+    i := 0
+    while i < len(aks) {
+        out[aks[i]] = 1
+        n = n + 1
+        i = i + 1
+    }
+    bks := keys(b)
+    i = 0
+    while i < len(bks) {
+        k := bks[i]
+        if out[k] == 0 { n = n + 1 }
+        out[k] = 1
+        i = i + 1
+    }
+}
+
+func link_resolve(has_specs, miss_specs) (include, exclude, has_filter, err_msg) {
+    include = make(map[string]int)
+    exclude = make(map[string]int)
+    has_filter = 0
+    err_msg = ""
+    i := 0
+    while i < len(has_specs) {
+        jc, fk, ff, fv, ok := link_parse(has_specs[i])
+        if ok == 0 { err_msg = "invalid has_link: " + has_specs[i]  return }
+        set, _, e := link_fk_set(jc, fk, ff, fv)
+        if e == 1 { err_msg = "cannot open join " + jc  return }
+        if has_filter == 0 {
+            include = set
+            has_filter = 1
+        } else {
+            include, _ = link_intersect(include, set)
+        }
+        i = i + 1
+    }
+    i = 0
+    while i < len(miss_specs) {
+        jc, fk, ff, fv, ok := link_parse(miss_specs[i])
+        if ok == 0 { err_msg = "invalid missing_link: " + miss_specs[i]  return }
+        set, _, e := link_fk_set(jc, fk, ff, fv)
+        if e == 1 { err_msg = "cannot open join " + jc  return }
+        exclude, _ = link_union(exclude, set)
+        i = i + 1
+    }
+}
+
+func st_page_linked(coll, where, has_specs, miss_specs, limit, offset, sort_field, desc) (data, err_msg) {
+    data = "{\"count\":0,\"total\":0,\"offset\":0,\"items\":[]}"
+    err_msg = ""
+    include, exclude, has_filter, em := link_resolve(has_specs, miss_specs)
+    if len(em) > 0 { err_msg = em  return }
+    if st_use(coll) == 0 { err_msg = "cannot open " + coll  return }
+    gr_sweep_expired()
+    fields, ops, vals := wh_pairs(where)
+    parent_ids := keys(g_mem)
+    matches := []string{}
+    mode := "link"
+    i := 0
+    while i < len(parent_ids) {
+        id := parent_ids[i]
+        if has_filter == 1 && include[id] == 0 {
+            i = i + 1
+            continue
+        }
+        if exclude[id] == 1 {
+            i = i + 1
+            continue
+        }
+        if wh_match(g_mem[id], fields, ops, vals) == 1 {
+            matches = append(matches, id)
+        }
+        i = i + 1
+    }
+    if len(sort_field) > 0 {
+        matches = query_sort_ids(matches, sort_field, desc)
+        mode = mode + "+sort"
+    }
+    if offset < 0 { offset = 0 }
+    if offset > len(matches) { offset = len(matches) }
+    stop := len(matches)
+    if limit > 0 && offset + limit < stop { stop = offset + limit }
+    items := []string{}
+    i = offset
+    while i < stop {
+        id := matches[i]
+        items = append(items, "{\"id\":\"" + jesc(id) + "\",\"doc\":" + g_mem[id] + "}")
+        i = i + 1
+    }
+    data = "{\"count\":" + str(len(items)) + ",\"total\":" + str(len(matches)) + ",\"offset\":" + str(offset) + ",\"mode\":\"" + mode + "\",\"items\":[" + join(items, ",") + "]}"
+}
+
+func st_count_linked(coll, where, has_specs, miss_specs) (n, err_msg) {
+    n = -1
+    err_msg = ""
+    include, exclude, has_filter, em := link_resolve(has_specs, miss_specs)
+    if len(em) > 0 { err_msg = em  return }
+    if st_use(coll) == 0 { err_msg = "cannot open " + coll  return }
+    gr_sweep_expired()
+    fields, ops, vals := wh_pairs(where)
+    parent_ids := keys(g_mem)
+    n = 0
+    i := 0
+    while i < len(parent_ids) {
+        id := parent_ids[i]
+        if has_filter == 1 && include[id] == 0 {
+            i = i + 1
+            continue
+        }
+        if exclude[id] == 1 {
+            i = i + 1
+            continue
+        }
+        if wh_match(g_mem[id], fields, ops, vals) == 1 { n = n + 1 }
+        i = i + 1
+    }
+}

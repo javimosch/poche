@@ -61,6 +61,30 @@ curl -sf -X POST -H "Authorization: Bearer $ADMIN" -H 'content-type: application
 curl -sf -X POST -H "Authorization: Bearer $ADMIN" -H 'content-type: application/json' \
   -d '{"field":"stock","expect":3,"value":2}' \
   "http://127.0.0.1:17701/api/products/$PRODUCT_ID/compare-swap" | grep -q '"stock":2'
+# link filters (has_link / missing_link) — via admin HTTP so running serve sees them
+curl -sf -X POST -H "Authorization: Bearer $ADMIN" -H 'content-type: application/json' \
+  -d '{"name":"link_posts","fields":"title:string"}' http://127.0.0.1:17701/admin/schema | grep -q link_posts
+curl -sf -X POST -H "Authorization: Bearer $ADMIN" -H 'content-type: application/json' \
+  -d '{"name":"link_tags","fields":"post_id:string!ref=link_posts,tag:string!required"}' \
+  http://127.0.0.1:17701/admin/schema | grep -q link_tags
+curl -sf -X POST -H "Authorization: Bearer $ADMIN" -H 'content-type: application/json' \
+  -d '{"collection":"link_tags","field":"tag"}' http://127.0.0.1:17701/admin/index | grep -q indexed
+curl -sf -X POST -H "Authorization: Bearer $ADMIN" -H 'content-type: application/json' \
+  -d '{"collection":"link_posts","actions":"read,create"}' http://127.0.0.1:17701/admin/expose | grep -q exposed
+curl -sf -X POST -H "Authorization: Bearer $ADMIN" -H 'content-type: application/json' \
+  -d '{"collection":"link_tags","actions":"read,create"}' http://127.0.0.1:17701/admin/expose | grep -q exposed
+P1=$(curl -sf -X POST -H "Authorization: Bearer $ADMIN" -H 'content-type: application/json' \
+  -d '{"title":"alpha"}' http://127.0.0.1:17701/api/link_posts | sed -n 's/.*"_id":"\([^"]*\)".*/\1/p')
+P2=$(curl -sf -X POST -H "Authorization: Bearer $ADMIN" -H 'content-type: application/json' \
+  -d '{"title":"beta"}' http://127.0.0.1:17701/api/link_posts | sed -n 's/.*"_id":"\([^"]*\)".*/\1/p')
+curl -sf -X POST -H "Authorization: Bearer $ADMIN" -H 'content-type: application/json' \
+  -d "{\"post_id\":\"$P1\",\"tag\":\"archive\"}" http://127.0.0.1:17701/api/link_tags | grep -q archive
+curl -sf -H "Authorization: Bearer $ADMIN" \
+  "http://127.0.0.1:17701/api/link_posts?has_link=link_tags.post_id:tag=archive" | grep -q "$P1"
+curl -sf -H "Authorization: Bearer $ADMIN" \
+  "http://127.0.0.1:17701/api/link_posts?missing_link=link_tags.post_id:tag=archive" | grep -q "$P2"
+curl -sf -H "Authorization: Bearer $ADMIN" \
+  "http://127.0.0.1:17701/api/link_posts/count?missing_link=link_tags.post_id:tag=archive" | grep -q '"count":1'
 ./poche guide | grep -q '"one_liner"'
 ./poche guide | grep -q '"gotchas"'
 ./poche help-json | grep -q '"env"'
@@ -75,8 +99,8 @@ curl -sf -X POST -H 'content-type: application/json' \
 curl -sf -H "Authorization: Bearer $FEEDBACK_ADMIN_TOKEN" \
   'http://127.0.0.1:17701/v1/feedback?limit=5' | grep -q '"ok":true'
 test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:17701/v1/feedback)" = 403
-# content-hash local version (sha256[:12]) + update --check
 HASH12=$(sha256sum ./poche | cut -c1-12)
 ./poche version | grep -q "$HASH12"
 POCHE_VERSION_URL=http://127.0.0.1:17701/version ./poche update --check | grep -q '"up_to_date":true'
 echo "OK smoke ($DB)"
+

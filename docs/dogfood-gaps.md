@@ -24,8 +24,9 @@ friction into a tested poche improvement.
 | 17 | grange range indexes were unreachable from poche | `schema index … --range`, admin `kind`, SDK helper | fixed |
 | 18 | Browser clients failed CORS preflight | OPTIONS 204 + explicit methods and headers | fixed |
 | 19 | REST creates returned 200 instead of resource semantics | POST now returns 201; SDK accepts 200/201 | fixed |
+| 20 | Inbox/Archive as pure tags needs join presence/absence filters | `has_link` / `missing_link` on list+count | fixed |
 
-The goal threshold is met: **19 concrete gaps fixed and exercised by the three
-compiled machin backends**.
+The goal threshold is met: **20 concrete gaps fixed and exercised by the three
+compiled machin backends** (+ webmail dogfood).
 
 Target: at least 10 verified fixes before this dogfood goal is complete.

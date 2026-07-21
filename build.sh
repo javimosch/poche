@@ -26,6 +26,7 @@ SRCS=(
   src/out.src
   src/store.src
   src/query_page.src
+  src/link_query.src
   src/realtime.src
   src/schema.src
   src/data.src
