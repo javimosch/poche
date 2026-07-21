@@ -1,6 +1,18 @@
 
         <div class="feature-card rounded-xl p-6">
           <div class="flex items-start gap-4">
+            <div class="w-12 h-12 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+              <span class="text-2xl">⇄</span>
+            </div>
+            <div>
+              <h3 class="text-xl font-semibold text-white mb-2">Join presence filters</h3>
+              <p class="text-white/40 leading-relaxed">List and count accept <code>has_link</code> / <code>missing_link</code> (e.g. Inbox = missing archive tag). Agents model tags without denormalized folder fields. Also <code>~=</code> substring contains in <code>where</code>.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="feature-card rounded-xl p-6">
+          <div class="flex items-start gap-4">
             <div class="w-12 h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
               <span class="text-2xl">◆</span>
             </div>
