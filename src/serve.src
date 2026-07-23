@@ -337,5 +337,12 @@ func cmd_serve(args) {
             }
         }
         watch_tick()
+        // auto-compact: if the active collection has >50 WAL chunks, compact it
+        if g_pend_recs == 0 && len(g_db) > 0 && g_cold == 0 {
+            chunks := st_wal_chunks(g_coll)
+            if chunks > 50 {
+                gr_compact()
+            }
+        }
     }
 }

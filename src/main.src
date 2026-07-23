@@ -2,7 +2,7 @@
 
 func usage() {
     eprint("usage: poche <command> …")
-    eprint("commands: init | schema | data | role | grant | user | file | serve | bench | guide | help-json | feedback | update | version")
+    eprint("commands: init | schema | data | role | grant | user | file | serve | compact | bench | guide | help-json | feedback | update | version")
     exit(80)
 }
 
@@ -47,6 +47,7 @@ func main() {
     if cmd == "init" { poche_init() }
     if cmd == "bench" { cmd_bench(rest) }
     if cmd == "serve" { cmd_serve(rest) }
+    if cmd == "compact" { cmd_compact(rest) }
 
     if cmd == "schema" {
         if len(rest) < 1 { out_err(80, "input", "usage: schema define|list|get|expose|unexpose|index …", "") }
