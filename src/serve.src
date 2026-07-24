@@ -313,6 +313,9 @@ func cmd_serve(args) {
     eprint("{\"event\":\"listening\",\"port\":" + str(port) + ",\"db\":\"" + jesc_p(poche_db()) + "\"}")
     server := listen(port)
     socket_timeout(server, 250)
+    req_count := 0
+    reset_every := parse_int(env("POCHE_ARENA_RESET_EVERY"))
+    if reset_every == 0 { reset_every = 200 }
     for {
         conn := accept(server)
         if conn >= 0 {
@@ -335,6 +338,7 @@ func cmd_serve(args) {
                     close(conn)
                 }
             }
+            req_count = req_count + 1
         }
         watch_tick()
         // auto-compact: if the active collection has >50 WAL chunks, compact it
@@ -343,6 +347,19 @@ func cmd_serve(args) {
             if chunks > 50 {
                 gr_compact()
             }
+        }
+        // arena memory management: the MFL main goroutine's arena otherwise
+        // grows forever. gr_reset() commits pending writes, drops all
+        // in-memory grange caches, and frees the arena. Safe only when no
+        // watchers are parked (g_w_* hold collection-name strings) and no
+        // staged writes are in flight; gr_reset() itself commits them.
+        if g_park == 0 && len(g_w_fd) == 0 && req_count >= reset_every {
+            if gr_reset() == 1 {
+                eprint("{\"event\":\"arena_reset\",\"reqs\":" + str(req_count) + "}")
+            } else {
+                eprint("{\"event\":\"arena_reset_failed\",\"reqs\":" + str(req_count) + "}")
+            }
+            req_count = 0
         }
     }
 }
