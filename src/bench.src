@@ -4,7 +4,9 @@ func cmd_bench(args) {
     n := 100000
     i := 0
     while i < len(args) {
-        if args[i] == "--n" && i + 1 < len(args) { n = parse_int(args[i + 1]) }
+        if args[i] == "--n" && i + 1 < len(args) { n = parse_int(args[i + 1])  i = i + 2  continue }
+        if args[i] == "--n" { out_err(80, "input", "missing value for --n", "") }
+        if has_prefix(args[i], "--") { out_err(80, "input", "unknown option: " + args[i], "bench [--n N]") }
         i = i + 1
     }
     if n < 1 { n = 1000 }

@@ -91,8 +91,9 @@ func cmd_update(args) {
     force := 0
     i := 0
     while i < len(args) {
-        if args[i] == "--check" { check_only = 1 }
-        if args[i] == "--force" { force = 1 }
+        if args[i] == "--check" { check_only = 1  i = i + 1  continue }
+        if args[i] == "--force" { force = 1  i = i + 1  continue }
+        if has_prefix(args[i], "-") { out_err(80, "input", "unknown option: " + args[i], "update [--check] [--force]") }
         i = i + 1
     }
 

@@ -233,12 +233,25 @@ func data_list(args) {
     desc := 0
     i := 1
     while i < len(args) {
+        if args[i] == "--where" && i + 1 >= len(args) { out_err(80, "input", "missing value for --where", "") }
         if args[i] == "--where" && i + 1 < len(args) { where = args[i + 1]  i = i + 2  continue }
+        if args[i] == "--limit" && i + 1 >= len(args) { out_err(80, "input", "missing value for --limit", "") }
         if args[i] == "--limit" && i + 1 < len(args) { limit = parse_int(args[i + 1])  i = i + 2  continue }
+        if args[i] == "--offset" && i + 1 >= len(args) { out_err(80, "input", "missing value for --offset", "") }
         if args[i] == "--offset" && i + 1 < len(args) { offset = parse_int(args[i + 1])  i = i + 2  continue }
+        if args[i] == "--sort" && i + 1 >= len(args) { out_err(80, "input", "missing value for --sort", "") }
         if args[i] == "--sort" && i + 1 < len(args) { sort_field = args[i + 1]  i = i + 2  continue }
         if args[i] == "--desc" { desc = 1  i = i + 1  continue }
-        i = i + 1
+        // Anything else is a mistake, and silently skipping it produced WRONG
+        // OUTPUT rather than an error: `--order desc` (the HTTP spelling) was
+        // dropped, so the caller got an ascending list while believing it was
+        // descending. A flag the CLI does not know is a failure, not a hint.
+        if has_prefix(args[i], "--") {
+            hint := "data list <collection> [--where k=v] [--limit N] [--offset N] [--sort field] [--desc]"
+            if args[i] == "--order" { hint = "use --desc for descending; --order=desc is the HTTP form (GET /api/<coll>?order=desc)" }
+            out_err(80, "input", "unknown option: " + args[i], hint)
+        }
+        out_err(80, "input", "unexpected argument: " + args[i], "data list <collection> [--where k=v] [--limit N] [--offset N] [--sort field] [--desc]")
     }
     _, found := schema_get(coll)
     if found == 0 { out_err(90, "not_found", "no schema for " + coll, "") }

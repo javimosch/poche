@@ -24,6 +24,8 @@ func role_list() { out_ok(st_all("roles", 0)) }
 
 func grant_cmd(args) {
     if len(args) < 3 { out_err(80, "input", "usage: grant <role> <collection> <actions>", "") }
+    _, grfound := st_get("roles", args[0])
+    if grfound == 0 { out_err(90, "not_found", "no such role: " + args[0], "create it first: poche role add " + args[0]) }
     id := args[0] + "__" + args[1]
     doc := "{\"role\":\"" + jesc_p(args[0]) + "\",\"collection\":\"" + jesc_p(args[1]) + "\",\"actions\":\"" + jesc_p(args[2]) + "\"}"
     if st_put("permissions", id, doc) == 0 { out_err(110, "internal", "write failed", "") }
@@ -31,12 +33,28 @@ func grant_cmd(args) {
 }
 
 func user_add(args) {
-    if len(args) < 2 { out_err(80, "input", "usage: user add <username> <role>", "") }
-    _, found := st_get("users", args[0])
-    if found == 1 { out_err(91, "exists", "user already exists: " + args[0], "") }
+    if len(args) < 2 { out_err(80, "input", "usage: user add <username> <role>   (or: user add <username> --role <role>)", "") }
+    uname := args[0]
+    role := args[1]
+    // `--role reader` used to be taken as the role NAME, producing a user whose
+    // role was literally "--role" and who therefore had no permissions at all.
+    // Accept the flag form, and reject anything else that looks like a flag.
+    if role == "--role" {
+        if len(args) < 3 { out_err(80, "input", "missing value for --role", "user add <username> --role <role>") }
+        role = args[2]
+    } else if has_prefix(role, "--") {
+        out_err(80, "input", "unknown option: " + role, "user add <username> <role>   (or --role <role>)")
+    }
+    if has_prefix(uname, "--") { out_err(80, "input", "unknown option: " + uname, "user add <username> <role>") }
+    // a role that does not exist grants nothing, so creating the user would
+    // hand back a token that silently fails every request
+    _, rfound := st_get("roles", role)
+    if rfound == 0 { out_err(90, "not_found", "no such role: " + role, "create it first: poche role add " + role) }
+    _, found := st_get("users", uname)
+    if found == 1 { out_err(91, "exists", "user already exists: " + uname, "") }
     token := to_hex(rand_bytes(16))
-    doc := "{\"username\":\"" + jesc_p(args[0]) + "\",\"role\":\"" + jesc_p(args[1]) + "\",\"token\":\"" + token + "\"}"
-    if st_put("users", args[0], doc) == 0 { out_err(110, "internal", "write failed", "") }
+    doc := "{\"username\":\"" + jesc_p(uname) + "\",\"role\":\"" + jesc_p(role) + "\",\"token\":\"" + token + "\"}"
+    if st_put("users", uname, doc) == 0 { out_err(110, "internal", "write failed", "") }
     out_ok(doc)
 }
 
