@@ -17,12 +17,22 @@ fi
 SRCS=(
   "$FRAMEWORK/flags.src"
   "$FRAMEWORK/machweb.src"
+  # grange's embeddable core. This list is not free-form: grange's modules call
+  # each other, so a subset either resolves or does not compile at all. It broke
+  # once (cold.src -> g_cifields in coldindex.src) and poche stayed broken until
+  # someone rebuilt. grange now pins the same list in scripts/embed_test.sh and
+  # compiles it in its gate, so drift shows up there instead of here.
   "$GRANGE_SRC/engine.src"
   "$GRANGE_SRC/registry.src"
   "$GRANGE_SRC/cold.src"
+  "$GRANGE_SRC/coldindex.src"
+  "$GRANGE_SRC/coldrange.src"
+  "$GRANGE_SRC/coldsort.src"
   "$GRANGE_SRC/index.src"
   "$GRANGE_SRC/range.src"
+  "$GRANGE_SRC/qcost.src"
   "$GRANGE_SRC/query.src"
+  "$GRANGE_SRC/order.src"
   src/out.src
   src/store.src
   src/query_page.src
