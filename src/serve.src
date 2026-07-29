@@ -240,7 +240,10 @@ func srv_handle(req) (res) {
             res = srv_ok(page)
             return
         }
-        res = srv_ok(st_page(coll, query(req, "where"), limit, offset, sort_field, desc))
+        // ?after=<cursor> continues an ordered page. Keyset, so it costs the
+        // same on page 500 as on page 1 and cannot show a row twice or skip
+        // one when rows are inserted or deleted elsewhere — unlike ?offset=.
+        res = srv_ok(st_page_after(coll, query(req, "where"), limit, offset, sort_field, desc, query(req, "after")))
         return
     }
     if req.method == "GET" && len(id) > 0 {

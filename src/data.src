@@ -224,13 +224,14 @@ func data_create(args) {
 }
 
 func data_list(args) {
-    if len(args) < 1 { out_err(80, "input", "usage: data list <collection> [--where k=v] [--limit N] [--offset N] [--sort field] [--desc]", "") }
+    if len(args) < 1 { out_err(80, "input", "usage: data list <collection> [--where k=v] [--limit N] [--offset N] [--sort field] [--desc] [--after cursor]", "") }
     coll := args[0]
     where := ""
     limit := 0
     offset := 0
     sort_field := ""
     desc := 0
+    after := ""
     i := 1
     while i < len(args) {
         if args[i] == "--where" && i + 1 >= len(args) { out_err(80, "input", "missing value for --where", "") }
@@ -242,20 +243,22 @@ func data_list(args) {
         if args[i] == "--sort" && i + 1 >= len(args) { out_err(80, "input", "missing value for --sort", "") }
         if args[i] == "--sort" && i + 1 < len(args) { sort_field = args[i + 1]  i = i + 2  continue }
         if args[i] == "--desc" { desc = 1  i = i + 1  continue }
+        if args[i] == "--after" && i + 1 >= len(args) { out_err(80, "input", "missing value for --after", "") }
+        if args[i] == "--after" && i + 1 < len(args) { after = args[i + 1]  i = i + 2  continue }
         // Anything else is a mistake, and silently skipping it produced WRONG
         // OUTPUT rather than an error: `--order desc` (the HTTP spelling) was
         // dropped, so the caller got an ascending list while believing it was
         // descending. A flag the CLI does not know is a failure, not a hint.
         if has_prefix(args[i], "--") {
-            hint := "data list <collection> [--where k=v] [--limit N] [--offset N] [--sort field] [--desc]"
+            hint := "data list <collection> [--where k=v] [--limit N] [--offset N] [--sort field] [--desc] [--after cursor]"
             if args[i] == "--order" { hint = "use --desc for descending; --order=desc is the HTTP form (GET /api/<coll>?order=desc)" }
             out_err(80, "input", "unknown option: " + args[i], hint)
         }
-        out_err(80, "input", "unexpected argument: " + args[i], "data list <collection> [--where k=v] [--limit N] [--offset N] [--sort field] [--desc]")
+        out_err(80, "input", "unexpected argument: " + args[i], "data list <collection> [--where k=v] [--limit N] [--offset N] [--sort field] [--desc] [--after cursor]")
     }
     _, found := schema_get(coll)
     if found == 0 { out_err(90, "not_found", "no schema for " + coll, "") }
-    out_ok(st_page(coll, where, limit, offset, sort_field, desc))
+    out_ok(st_page_after(coll, where, limit, offset, sort_field, desc, after))
 }
 
 func data_get(args) {

@@ -1,4 +1,15 @@
-// poche query paging — total/offset and numeric sort over grange candidates.
+// poche query paging.
+//
+// The fallback below is a full scan plus an INSERTION SORT that re-parses the
+// sort field inside its inner loop — O(n^2) json parses. Measured on "top 5 by
+// n": 22 ms over 500 documents, 1639 ms over 4000. Eight times the data, 75
+// times the time, to return five rows.
+//
+// grange answers that shape from the sorted projection of a --range index in
+// O(log n + limit), and hands back a CURSOR for the next page. So when the sort
+// field carries a range index, poche now delegates instead of sorting. The old
+// path stays for everything else: a sort field with no range index, or a jump
+// to an arbitrary offset, which a keyset cursor cannot express.
 
 func query_sort_ids(ids, field, desc) (out) {
     out = []string{}
@@ -33,9 +44,40 @@ func query_sort_ids(ids, field, desc) (out) {
 }
 
 func st_page(coll, where, limit, offset, sort_field, desc) (data) {
+    data = st_page_after(coll, where, limit, offset, sort_field, desc, "")
+}
+
+// st_page_after adds a keyset cursor: pass the previous page's "next".
+func st_page_after(coll, where, limit, offset, sort_field, desc, after) (data) {
     data = "{\"count\":0,\"total\":0,\"offset\":0,\"items\":[]}"
     if st_use(coll) == 0 { return }
     gr_sweep_expired()
+
+    // Fast path: a range-indexed sort field, and either the first page or a
+    // cursor. An offset > 0 without a cursor still uses the scan, because
+    // "skip exactly N rows" is not something a keyset walk can answer without
+    // walking those N rows anyway.
+    if len(sort_field) > 0 {
+        ready, why := ord_ready(sort_field)
+        if ready == 1 && (offset == 0 || len(after) > 0) {
+            od, ook, owhy := q_find_page(where, limit, sort_field, desc, after)
+            if ook == 1 {
+                // total is reported for API compatibility; grange's count is
+                // indexed/cached, so this is not the scan the old path did
+                ftotal := gr_q_count_int(where)
+                fcnt, fcerr := json_get(od, ".count")
+                fmode, fmerr := json_get(od, ".mode")
+                fitems, fierr := json_get(od, ".items")
+                fnext, fnerr := json_get(od, ".next")
+                fnextpart := ""
+                if len(fnerr) == 0 { fnextpart = ",\"next\":" + fnext }
+                data = "{\"count\":" + fcnt + ",\"total\":" + str(ftotal) + ",\"offset\":" + str(offset) +
+                    ",\"mode\":" + fmode + fnextpart + ",\"items\":" + fitems + "}"
+                return
+            }
+        }
+    }
+
     fields, ops, vals := wh_pairs(where)
     candidates, mode := wh_candidates(fields, ops, vals)
     matches := []string{}
@@ -63,4 +105,13 @@ func st_page(coll, where, limit, offset, sort_field, desc) (data) {
         i = i + 1
     }
     data = "{\"count\":" + str(len(items)) + ",\"total\":" + str(len(matches)) + ",\"offset\":" + str(offset) + ",\"mode\":\"" + mode + "\",\"items\":[" + join(items, ",") + "]}"
+}
+
+// gr_q_count_int returns the number of matches for `where`, using grange's
+// count (O(1) on an indexed equality, cached on cold collections).
+func gr_q_count_int(where) (n) {
+    n = 0
+    cj := q_count(where)
+    cv, cerr := json_get(cj, ".count")
+    if len(cerr) == 0 { n = parse_int(cv) }
 }

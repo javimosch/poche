@@ -31,6 +31,8 @@ curl -H "Authorization: Bearer $TOK" 'http://127.0.0.1:7700/watch?coll=articles&
 | **CMS, not SQL** | schemas + documents + grants — PocketBase-shaped, headless |
 | **Agent-native** | JSON stdout, typed stderr errors, exit 80–119, `guide` / `help-json` / `feedback` / `update` |
 | **grange storage** | crash-safe document DB; faster than SQLite on indexed workloads (bench 100k) |
+| **ordered listing** | `?sort=<field>&order=desc` uses grange's range index when the field has one (`schema index <coll> <field> --range`): 5-6 ms vs 1190-1354 ms for the scan+sort fallback, measured over HTTP on 4000 documents |
+| **keyset paging** | `?after=<cursor>` continues an ordered page using the `next` cursor in the response. Costs the same on page 500 as page 1, and cannot show a row twice or skip one when rows change elsewhere — unlike `?offset=`, which is still there for arbitrary jumps |
 | **Realtime** | long-poll `/watch` over grange's change ring |
 | **No UI** | CLI + HTTP only; docs site for humans |
 
