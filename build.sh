@@ -22,10 +22,13 @@ SRCS=(
   # once (cold.src -> g_cifields in coldindex.src) and poche stayed broken until
   # someone rebuilt. grange now pins the same list in scripts/embed_test.sh and
   # compiles it in its gate, so drift shows up there instead of here.
+  "$GRANGE_SRC/recfile.src"
   "$GRANGE_SRC/engine.src"
   "$GRANGE_SRC/registry.src"
   "$GRANGE_SRC/cold.src"
+  "$GRANGE_SRC/coldbulk.src"
   "$GRANGE_SRC/coldindex.src"
+  "$GRANGE_SRC/coldquery.src"
   "$GRANGE_SRC/coldrange.src"
   "$GRANGE_SRC/coldsort.src"
   "$GRANGE_SRC/index.src"
