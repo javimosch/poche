@@ -69,6 +69,20 @@ func srv_handle(req) (res) {
         res = srv_ok("{\"status\":\"ok\",\"tool\":\"poche\"}")
         return
     }
+    // The root is where anything that finds this server starts — a browser, a
+    // curious human, or an agent that was handed a bare URL. Returning "no such
+    // route" there tells none of them what this is or how to use it, while
+    // /guide and /llms.txt sat one path segment away. Unauthenticated, like the
+    // other discovery routes, and deliberately tiny: it points at them.
+    if req.method == "GET" && (p == "/" || p == "") {
+        res = srv_ok("{\"tool\":\"poche\",\"what\":\"agent-first headless CMS over grange — CLI + HTTP, no admin UI\"" +
+            ",\"version\":\"" + poche_version() + "\"" +
+            ",\"discover\":{\"guide\":\"/guide\",\"llms\":\"/llms.txt\",\"health\":\"/health\",\"version\":\"/version\"}" +
+            ",\"api\":\"/api/<collection>[?where=&limit=&offset=&sort=&order=asc|desc]  ·  /api/<collection>/count  ·  /api/<collection>/<id>\"" +
+            ",\"auth\":\"Bearer token in the Authorization header; there is no anonymous read and no token query parameter\"" +
+            ",\"watch\":\"/watch?coll=&since=&timeout= (long-poll)\"}")
+        return
+    }
     if req.method == "GET" && p == "/guide" {
         res = response("200 OK", "application/json", guide_json())
         return
@@ -93,7 +107,7 @@ func srv_handle(req) (res) {
     tok := bearer(req)
     if cloud_activate(tok) == 0 && cloud_on() == 1 {
         // allow admin root token only for /health already returned; else 401
-        if p != "/health" && p != "/_health" && p != "/guide" && p != "/llms.txt" && p != "/version" && p != "/v1/version" {
+        if p != "/" && p != "" && p != "/health" && p != "/_health" && p != "/guide" && p != "/llms.txt" && p != "/version" && p != "/v1/version" {
             res = srv_err("401 Unauthorized", "auth", "unknown tenant token (POST /tenants with X-Peage-Wallet)")
             return
         }
