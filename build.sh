@@ -31,6 +31,7 @@ SRCS=(
   "$GRANGE_SRC/index.src"
   "$GRANGE_SRC/range.src"
   "$GRANGE_SRC/qcost.src"
+  "$GRANGE_SRC/project.src"
   "$GRANGE_SRC/query.src"
   "$GRANGE_SRC/order.src"
   src/out.src
