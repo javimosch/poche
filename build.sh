@@ -58,5 +58,24 @@ SRCS=(
 )
 
 "$MACHIN" encode "${SRCS[@]}" > poche.mfl
-"$MACHIN" build poche.mfl -o poche
-echo "built ./poche"
+
+# STATIC=1 builds the RELEASE artifact: no libssl/libcrypto, no glibc floor.
+#
+# Without it machin links against the build host's libraries, and CI runs on
+# ubuntu-latest — so the published binary carried a glibc 2.38 floor and would
+# not start on anything older than Ubuntu 24.04, nor on Alpine or a slim
+# container. Nobody could have reported that: the failure happens before the
+# tool runs. Found by an estate-wide install audit (stranger).
+if [ "${STATIC:-0}" = "1" ]; then
+  "$MACHIN" build poche.mfl -o poche --static
+  # ldd EXITS 1 on a static binary, and this script runs under `set -o pipefail`,
+  # so `ldd x | grep -q ...` fails even when grep matches — the first version of
+  # this guard rejected a perfectly static binary. Capture, then match.
+  LDD_OUT=$(ldd poche 2>&1 || true)
+  case "$(file poche)" in *"statically linked"*) ;; *) echo "STATIC=1 but the binary is not static — refusing"; exit 1 ;; esac
+  case "$LDD_OUT" in *"not a dynamic executable"*) ;; *) echo "STATIC=1 but the binary has dynamic deps — refusing: $LDD_OUT"; exit 1 ;; esac
+  echo "built ./poche (static, $(wc -c < poche) bytes)"
+else
+  "$MACHIN" build poche.mfl -o poche
+  echo "built ./poche"
+fi

@@ -20,11 +20,15 @@ jobs:
         run: |
           (cd ../machin && go build -o machin .)
           sudo cp ../machin/machin /usr/local/bin/machin
-          sudo apt-get update -qq && sudo apt-get install -y -qq gcc
+          sudo apt-get update -qq && sudo apt-get install -y -qq gcc libssl-dev musl-tools
       - name: Build
         run: |
-          ./build.sh
+          STATIC=1 ./build.sh
           cp poche poche-linux-amd64
+          # the guard is in build.sh, but assert it here too: CI is where the
+          # published artifact is actually produced
+          LDD_OUT=$(ldd poche-linux-amd64 2>&1 || true)
+          case "$LDD_OUT" in *"not a dynamic executable"*) ;; *) echo "published binary is not static: $LDD_OUT"; exit 1 ;; esac
           sha256sum poche-linux-amd64 | tee SHA256SUMS.txt
       - name: Publish
         uses: softprops/action-gh-release@v2

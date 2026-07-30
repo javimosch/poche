@@ -7,6 +7,10 @@
 </p>
 
 ```sh
+# Linux x86_64, statically linked — no runtime dependencies, no glibc floor:
+curl -fsSL https://github.com/javimosch/poche/releases/latest/download/poche-linux-amd64 -o poche
+chmod +x poche
+# ...or build it yourself:
 ./build.sh                         # needs machin
 export POCHE_DB=./poche.data
 ./poche init                       # → admin_token
