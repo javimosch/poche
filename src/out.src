@@ -12,6 +12,10 @@ func eprint(s) { n := write(2, s + "\n") }
 
 func out_ok(dataJson) {
     println("{\"ok\":true,\"version\":\"" + poche_version() + "\",\"data\":" + dataJson + "}")
+    // Every successful command exits through here, so this is the one place
+    // telemetry can report from — and the right one: the result is already
+    // written, so the report cannot delay or corrupt it.
+    tel_report(tel_verb_from_args(), 0)
     exit(0)
 }
 

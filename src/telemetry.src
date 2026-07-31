@@ -1,0 +1,278 @@
+// cli-telemetry-spec — reference implementation for machin (MFL).
+//
+// Vendor this file into your tool and define three functions somewhere in your
+// own sources:
+//
+//     func tel_tool()      (tstr) { tstr = "vigie" }        // lowercase tool name
+//     func tel_version()   (tstr) { tstr = app_version() }  // your version string
+//     func tel_envprefix() (tstr) { tstr = "VIGIE" }        // env var prefix
+//
+// The return names are prefixed (tstr, tok, tyes...) on purpose: MFL infers a
+// name's type program-wide, so a module that claimed `yes` or `ok` would collide
+// with any host that already returns those with a different type. Dropping this
+// file into vigie failed exactly that way ("type mismatch for 'yes' in
+// hasflag: num vs bool").
+//
+// Then call `tel_report(verb, exit_class)` AFTER your result has been written to
+// stdout, and wire a `telemetry` verb to `tel_status_json()` / `tel_set(0|1)`.
+//
+// Everything else — disclosure, the off switches, the allow-listed payload, the
+// bounded send — is here and identical across tools, which is the point: a
+// convention people can read once.
+//
+// It sends: tool, version, event (install|run|error), verb, os, arch, exit
+// class, timestamp. It sends NO install id: the `install` event fires once per
+// machine, so counting install events already answers "how many machines" with
+// nothing per-install existing anywhere.
+//
+// It never sends: hostname, username, paths, arguments, flag values, data,
+// error text, environment, or any hash of those.
+//
+// Spec: https://github.com/javimosch/cli-telemetry-spec
+// Verify from outside: https://github.com/javimosch/stranger
+
+func tel_env(suffix) (tval) {
+    tval = env(tel_envprefix() + "_" + suffix)
+}
+
+func tel_endpoint() (turl) {
+    turl = tel_env("TELEMETRY_URL")
+    // REQUIRED by the spec (§5.5), not optional: an organisation that wants the
+    // signal in-house should not have to choose between "on" and "off", and a
+    // reviewer checking what the tool sends has to be able to aim it somewhere
+    // harmless. Without an override the only way to see what a tool sends is to
+    // let it send.
+    // ONE collector for every tool, not one per tool. The payload carries the
+    // tool name, the collector aggregates by it, and a single endpoint means a
+    // single place to audit, a single privacy policy, and no chance of a tool
+    // defaulting to a host that has no collector on it — which is what
+    // "https://<tool>.intrane.fr/t" did on the first vendored copy.
+    //
+    // Change this constant when you vendor this file into your own estate.
+    if len(turl) == 0 { turl = "https://grange.intrane.fr/t" }
+}
+
+func tel_cfg_dir() (tdir) {
+    tdir = env("XDG_CONFIG_HOME")
+    if len(tdir) == 0 {
+        h := env("HOME")
+        if len(h) == 0 { tdir = ""  return }
+        tdir = h + "/.config"
+    }
+    tdir = tdir + "/" + tel_tool()
+}
+
+// mkdir is ONE level in machin, and $HOME/.config does not exist on a fresh
+// machine. Without this the opt-out flag silently fails to persist — the tool
+// prints "disabled" and keeps sending — and the first-run notice prints forever.
+func tel_mkdir_p(tdir) (tok) {
+    tok = 0
+    if len(tdir) == 0 { return }
+    parts := split(tdir, "/")
+    cur := ""
+    i := 0
+    while i < len(parts) {
+        if len(parts[i]) > 0 {
+            cur = cur + "/" + parts[i]
+            mkdir(cur)
+        }
+        i = i + 1
+    }
+    probe := tdir + "/.w"
+    if write_file(probe, "1") < 0 { return }
+    remove(probe)
+    tok = 1
+}
+
+// An env var counts as SET only when it is not an explicit off: DO_NOT_TRACK=0
+// means "do track", which is why the convention has a value at all.
+func tel_truthy(tval) (tyes) {
+    tyes = 0
+    if len(tval) == 0 { return }
+    if tval == "0" || tval == "false" || tval == "off" || tval == "no" { return }
+    tyes = 1
+}
+
+// tel_why names the reason telemetry is off. "Off, and I will not say why" is
+// not inspectable, and inspectability is what makes opt-out defensible.
+func tel_why() (treason) {
+    treason = "enabled"
+    if tel_truthy(env("DO_NOT_TRACK")) == 1 { treason = "DO_NOT_TRACK is set"  return }
+    t := tel_env("TELEMETRY")
+    if len(t) > 0 && tel_truthy(t) == 0 { treason = tel_envprefix() + "_TELEMETRY is off"  return }
+    // Automation is not a user (spec §2.2.1). CI is the detectable case; audit
+    // tools, mirrors and image builds mostly set nothing, which is exactly why
+    // DO_NOT_TRACK above must be honoured — it is the only signal they can send.
+    if len(env("CI")) > 0 { treason = "CI detected"  return }
+    if len(env("GITHUB_ACTIONS")) > 0 { treason = "CI detected (GitHub Actions)"  return }
+    if len(env("GITLAB_CI")) > 0 { treason = "CI detected (GitLab CI)"  return }
+    if len(env("BUILDKITE")) > 0 { treason = "CI detected (Buildkite)"  return }
+    tdir := tel_cfg_dir()
+    if len(tdir) == 0 { treason = "no config directory (HOME unset)"  return }
+    if len(read_file(tdir + "/telemetry-off")) > 0 { treason = "disabled by `" + tel_tool() + " telemetry --off`"  return }
+}
+
+func tel_enabled() (tyes) {
+    tyes = 0
+    if tel_why() == "enabled" { tyes = 1 }
+}
+
+// tel_payload builds the EXACT bytes that get posted. tel_status_json prints
+// this same function's output, so the inspection verb cannot describe something
+// other than what is sent — if it could, opt-out would not be honest.
+func tel_payload(evt, verb, exit_class) (tjson) {
+    tjson = "{\"tool\":\"" + tel_tool() + "\"" +
+        ",\"version\":\"" + tel_version() + "\"" +
+        ",\"event\":\"" + evt + "\"" +
+        ",\"verb\":\"" + verb + "\"" +
+        ",\"os\":\"linux\",\"arch\":\"x86_64\"" +
+        ",\"exit_class\":" + str(exit_class) +
+        ",\"ts\":" + str(now()) + "}"
+}
+
+func tel_notice_shown() (tshown) {
+    tshown = 0
+    tdir := tel_cfg_dir()
+    if len(tdir) == 0 { tshown = 1  return }
+    if len(read_file(tdir + "/telemetry-notice")) > 0 { tshown = 1 }
+}
+
+// Disclosure on STDERR, once per machine, before anything is sent. stderr
+// because stdout is the data contract — a notice appearing in someone's
+// `tool | jq` pipeline breaks every consumer at once, on the run where they
+// first met the tool.
+func tel_notice() {
+    if tel_notice_shown() == 1 { return }
+    tdir := tel_cfg_dir()
+    if tel_mkdir_p(tdir) == 0 { return }
+    write_file(tdir + "/telemetry-notice", "1")
+    write(2, "[telemetry] " + tel_tool() + " sends anonymous usage counts: version, os/arch, which verb\n")
+    write(2, "[telemetry] ran, and whether it failed. No identity, arguments, paths or your data.\n")
+    write(2, "[telemetry] Exact payload: `" + tel_tool() + " telemetry`. Disable: " + tel_envprefix() + "_TELEMETRY=0\n")
+}
+
+// machin's https_post has no timeout, so the send races a sleep: the caller
+// waits at most 2 seconds and continues regardless. A collector that is down,
+// slow, firewalled, or unreachable on an air-gapped host must be
+// indistinguishable from one that answered — without this race a hung collector
+// hangs every command.
+func tel_post_worker(url, body, done) {
+    https_post(url, body)
+    done <- 1
+}
+
+func tel_timeout_worker(done) {
+    sleep(2000)
+    done <- 0
+}
+
+func tel_send(evt, verb, exit_class) {
+    if tel_enabled() == 0 { return }
+    tel_notice()
+    url := tel_endpoint()
+    body := tel_payload(evt, verb, exit_class)
+    done := make(chan int)
+    go tel_post_worker(url, body, done)
+    go tel_timeout_worker(done)
+    <-done
+}
+
+func tel_first_run_pending() (tpending) {
+    tpending = 0
+    tdir := tel_cfg_dir()
+    if len(tdir) == 0 { return }
+    if len(read_file(tdir + "/installed")) == 0 { tpending = 1 }
+}
+
+func tel_mark_installed() {
+    tdir := tel_cfg_dir()
+    if len(tdir) == 0 { return }
+    if tel_mkdir_p(tdir) == 0 { return }
+    write_file(tdir + "/installed", str(now()))
+}
+
+// Call this AFTER the user's result is on stdout. One event per invocation,
+// never on a timer, never per request — a per-request event is a request log,
+// and this is not one.
+func tel_report(verb, exit_class) {
+    if tel_enabled() == 0 { return }
+    if tel_first_run_pending() == 1 {
+        tel_mark_installed()
+        tel_send("install", verb, exit_class)
+        return
+    }
+    evt := "run"
+    if exit_class != 0 { evt = "error" }
+    tel_send(evt, verb, exit_class)
+}
+
+// tel_set persists the opt-out and READS IT BACK. Reporting "disabled" without
+// confirming it survived the process is how a tool ends up still sending data
+// from someone who switched it off and was told it worked. Returns (json, ok).
+func tel_set(on) (tdata, tok) {
+    tok = 1
+    tdir := tel_cfg_dir()
+    if on == 1 {
+        if len(tdir) > 0 { remove(tdir + "/telemetry-off") }
+        tdata = "{\"enabled\":true,\"reason\":\"enabled\"}"
+        return
+    }
+    if len(tdir) == 0 {
+        tok = 0
+        tdata = "{\"error\":\"HOME is unset, so the opt-out cannot be persisted; use " + tel_envprefix() + "_TELEMETRY=0\"}"
+        return
+    }
+    tel_mkdir_p(tdir)
+    write_file(tdir + "/telemetry-off", "1")
+    if tel_enabled() == 1 {
+        tok = 0
+        tdata = "{\"error\":\"could not persist the opt-out to " + tdir + "; use " + tel_envprefix() + "_TELEMETRY=0, which needs no writable directory\"}"
+        return
+    }
+    tdata = "{\"enabled\":false,\"reason\":\"disabled by `" + tel_tool() + " telemetry --off`\"}"
+}
+
+// tel_verb_from_args: for hosts whose command functions EXIT rather than return,
+// so there is no post-dispatch line to hook. Their single output function (the
+// one that prints and exits) is the correct insertion point instead — it runs
+// after the result is written, which is exactly where the spec wants the report
+// — but it does not know which verb ran. This reads it back from argv.
+func tel_verb_from_args() (tstr) {
+    tstr = "none"
+    a := args()
+    if len(a) > 1 { tstr = a[1] }
+}
+
+// tel_hasflag: hosts parse flags in wildly different ways (some have a helper,
+// some loop inline, some have none), and the telemetry verb needs exactly one
+// flag check. Providing it here means adopting the module never depends on the
+// host's argument conventions.
+func tel_hasflag(a, name) (tyes) {
+    tyes = 0
+    i := 0
+    while i < len(a) {
+        if a[i] == name { tyes = 1 }
+        i = i + 1
+    }
+}
+
+// The inspection verb's body. Prints the REAL next payload from the same builder
+// tel_send uses, so a reviewer verifies rather than trusts.
+func tel_status_json() (tjson) {
+    treason := tel_why()
+    ten := "false"
+    if treason == "enabled" { ten = "true" }
+    tjson = "{\"enabled\":" + ten +
+        ",\"reason\":\"" + treason + "\"" +
+        ",\"endpoint\":\"" + tel_endpoint() + "\"" +
+        ",\"disable\":\"" + tel_envprefix() + "_TELEMETRY=0\"" +
+        ",\"notice_shown\":" + str(tel_notice_shown()) +
+        ",\"install_id\":\"none — no per-install identifier is sent\"" +
+        ",\"spec\":\"https://github.com/javimosch/cli-telemetry-spec\"" +
+        ",\"next_payload\":" + tel_payload("run", "telemetry", 0) + "}"
+}
+
+// ---- the three host definitions this module needs ----
+func tel_tool()      (tstr) { tstr = "poche" }
+func tel_version()   (tstr) { tstr = poche_version() }
+func tel_envprefix() (tstr) { tstr = "POCHE" }

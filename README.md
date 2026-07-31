@@ -7,6 +7,10 @@
 </p>
 
 ```sh
+# `poche telemetry` shows exactly what poche reports about itself; disable with
+# POCHE_TELEMETRY=0 or DO_NOT_TRACK=1. It never sends your content, schemas,
+# collection names or tokens — only version, os/arch, verb and exit class.
+
 # Linux x86_64, statically linked — no runtime dependencies, no glibc floor:
 curl -fsSL https://github.com/javimosch/poche/releases/latest/download/poche-linux-amd64 -o poche
 chmod +x poche

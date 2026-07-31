@@ -37,6 +37,7 @@ SRCS=(
   "$GRANGE_SRC/project.src"
   "$GRANGE_SRC/query.src"
   "$GRANGE_SRC/order.src"
+  src/telemetry.src
   src/out.src
   src/store.src
   src/query_page.src

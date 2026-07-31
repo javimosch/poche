@@ -34,6 +34,18 @@ func main() {
     cmd := argv[1]
     rest := strip_global_flags(shift(argv, 2))
 
+    if cmd == "telemetry" {
+        if tel_hasflag(argv, "--telemetry-off") == 1 {
+            td, tok := tel_set(0)
+            println(td)
+            if tok == 0 { exit(90) }
+            exit(0)
+        }
+        if tel_hasflag(argv, "--telemetry-on") == 1 { td, tok := tel_set(1)  println(td)  exit(0) }
+        println(tel_status_json())
+        exit(0)
+    }
+
     // Passive update nudge on server-touching commands (cli-update-spec §4).
     if cmd != "version" && cmd != "guide" && cmd != "help-json" && cmd != "update" {
         if cmd == "serve" || cmd == "feedback" { version_nudge() }
