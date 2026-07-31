@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+
+# A project's own test suite is not a user. It runs the binary many times in a
+# fresh environment, which to usage telemetry is indistinguishable from many new
+# machines — poche's suite alone put 363 fabricated events into the collector.
+# cli-telemetry-spec §2.2.1: harnesses that run binaries must set this.
+export DO_NOT_TRACK=1
+
 # Smoke: core lifecycle + dogfood constraints/mutations/query.
 set -euo pipefail
 cd "$(dirname "$0")"
