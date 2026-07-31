@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# The build runs the binary to verify it (version/help/guide). That is not
+# usage: a build is automation. cli-telemetry-spec §2.2.1.
+export DO_NOT_TRACK=1
 # Build poche — agent-first headless CMS over grange.
 set -euo pipefail
 cd "$(dirname "$0")"

@@ -34,8 +34,25 @@ func out_err(code, typ, msg, suggestion) {
 
 func unq(s) (r) {
     r = s
-    if len(s) >= 2 {
-        if substr(s, 0, 1) == "\"" { r = substr(s, 1, len(s) - 1) }
+    if len(s) < 2 || substr(s, 0, 1) != "\"" { return }
+    r = ""
+    i := 1
+    stop := len(s) - 1
+    while i < stop {
+        c := charat(s, i)
+        if c == "\\" && i + 1 < stop {
+            n := charat(s, i + 1)
+            if n == "n" { r = r + "\n" }
+            else if n == "r" { r = r + "\r" }
+            else if n == "t" { r = r + "\t" }
+            else if n == "\"" { r = r + "\"" }
+            else if n == "\\" { r = r + "\\" }
+            else { r = r + "\\" + n }
+            i = i + 2
+        } else {
+            r = r + c
+            i = i + 1
+        }
     }
 }
 
