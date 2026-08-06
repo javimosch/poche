@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.1 — 2026-08-07
+
+### Fixed
+
+- **Re-cut the linux-amd64 release binary.** The artifact published for 0.3.0
+  crashed with a floating point exception on *every* invocation — `init`,
+  `version`, all of it — so anyone who downloaded it got a tool that could not
+  start. Rebuilt from the same source, which runs correctly; the previous
+  artifact appears never to have been executed before it was uploaded.
+
+Releases are now verified before upload: the binary must answer `version`,
+complete an `init`, and serve a request.
+
 ## 0.2.1 — 2026-07-19
 
 ### Fixed
