@@ -105,10 +105,11 @@ func doc_from_json_mode(fieldspec, body, require_all) (doc, errmsg) {
     errmsg = ""
     if valid_doc(body) == 0 { errmsg = "body must be minified JSON object"  return }
     kvs := []string{}
-    parts := split(fieldspec, ",")
+    raw_parts := []string{}
+    specs := split(fieldspec, ",")
     i := 0
-    while i < len(parts) {
-        p := parts[i]
+    while i < len(specs) {
+        p := specs[i]
         c := index(p, ":")
         if c > 0 {
             k := substr(p, 0, c)
@@ -123,15 +124,37 @@ func doc_from_json_mode(fieldspec, body, require_all) (doc, errmsg) {
                 if t == "bool" {
                     if got != "true" && got != "false" { errmsg = "field " + k + " want bool"  return }
                 }
-                v := got
-                if quoted == 1 { v = unq(got) }
-                kvs = append(kvs, k + "=" + v)
+                if t == "string" {
+                    // `got` is already a valid JSON string token. Keep it raw:
+                    // unq() would remove the quotes and build_doc would escape
+                    // the token a second time, corrupting backslashes, unicode,
+                    // and control characters on a REST round-trip.
+                    raw_parts = append(raw_parts, "\"" + jesc_p(k) + "\":" + got)
+                } else {
+                    v := got
+                    if quoted == 1 { v = unq(got) }
+                    kvs = append(kvs, k + "=" + v)
+                }
+            } else if require_all == 1 && field_required(fieldspec, k) == 1 {
+                errmsg = "required field missing: " + k
+                return
             }
         }
         i = i + 1
     }
-    if len(kvs) == 0 { errmsg = "no schema fields present in body"  return }
-    doc, errmsg = build_doc_mode(fieldspec, kvs, require_all)
+    if len(kvs) == 0 && len(raw_parts) == 0 { errmsg = "no schema fields present in body"  return }
+    // Validate/normalize numeric and boolean fields through the existing path,
+    // then merge its canonical fields with the raw string tokens.
+    normalized := ""
+    normalized, errmsg = build_doc_mode(fieldspec, kvs, 0)
+    if errmsg != "" { return }
+    // Strip build_doc_mode's braces and splice its fields in beside the raw
+    // string tokens. It returns "{}" when there were no non-string fields.
+    if len(normalized) > 2 {
+        normalized = substr(normalized, 1, len(normalized) - 1)
+        raw_parts = append(raw_parts, normalized)
+    }
+    doc = "{" + join(raw_parts, ",") + "}"
 }
 
 func doc_from_json(fieldspec, body) (doc, errmsg) {

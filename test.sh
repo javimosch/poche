@@ -112,4 +112,5 @@ POCHE_VERSION_URL=http://127.0.0.1:17701/version ./poche update --check | grep -
 echo "OK smoke ($DB)"
 
 # ordered listing + keyset paging (the grange fast path and its fallback)
+./scripts/json_roundtrip_test.sh
 ./scripts/ordered_paging_test.sh

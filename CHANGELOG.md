@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.2 — 2026-08-07
+
+### Fixed
+
+- **Strings no longer come back changed.** Rebuilding a document from a request
+  body unquoted each JSON string token and then re-serialized it, escaping the
+  value a second time. Anything already carrying escapes was corrupted, and the
+  damage compounded on every update:
+
+      sent  "séjour à La Cure"   stored  "s\u00e9jour \u00e0 La Cure"
+      sent  "confirmed ✅"        stored  "confirmed \u2705"
+
+  This bites clients that escape non-ASCII by default — Python's `json.dumps`,
+  and Go's `encoding/json` for `<`, `>` and `&`. String tokens are now spliced
+  in raw; typed validation is unchanged and still rejects a number in a string
+  field. Regression test: `scripts/json_roundtrip_test.sh`.
+- `unq()` decodes JSON escapes with the real parser instead of a hand-rolled
+  loop that did not understand `\uXXXX` at all.
+
 ## 0.3.1 — 2026-08-07
 
 ### Fixed
